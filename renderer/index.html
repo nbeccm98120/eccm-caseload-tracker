@@ -1179,24 +1179,6 @@ tbody tr.mr-critical td{}
             <button type="button" class="btn btn-neutral btn-sm" onclick="openFolder()" id="details-open-folder-btn" style="display:none">📂</button>
           </div>
         </div>
-        <div class="form-section">Security</div>
-        <div class="form-group full">
-          <label>Reset App Password</label>
-          <button type="button" class="btn btn-neutral btn-sm" id="pw-change-btn" onclick="showChangePwFields()">Change Password</button>
-          <div id="pw-change-fields" style="display:none;margin-top:8px;display:none">
-            <div style="display:flex;flex-direction:column;gap:8px">
-              <div><label style="font-size:11px">Current Password</label><input type="password" id="pw-current" placeholder="Current password" autocomplete="off" style="width:100%"></div>
-              <div><label style="font-size:11px">New Password</label><input type="password" id="pw-new" placeholder="New password (min 6 chars)" autocomplete="off" style="width:100%"></div>
-              <div><label style="font-size:11px">Confirm New Password</label><input type="password" id="pw-confirm" placeholder="Confirm new password" autocomplete="off" style="width:100%"></div>
-              <span id="pw-error" style="font-size:11px;color:var(--red);display:none"></span>
-              <div style="display:flex;gap:8px">
-                <button type="button" class="btn btn-sm" onclick="saveNewResetPassword()">Save Password</button>
-                <button type="button" class="btn btn-neutral btn-sm" onclick="cancelChangePw()">Cancel</button>
-              </div>
-            </div>
-          </div>
-          <span style="font-size:11px;color:var(--text3);margin-top:4px;display:block">This password is required to reset the app. It is stored locally and never shared.</span>
-        </div>
         <div class="form-section" id="update-section" style="display:none">Updates</div>
         <div class="form-group full" id="update-row" style="display:none">
           <div id="update-status" style="font-size:13px;color:var(--text2)">Checking for updates…</div>
@@ -1502,8 +1484,6 @@ async function openAppDetails() {
   coachEl.setAttribute('readonly',''); coachEl.style.background='var(--surface2)'; coachEl.style.color='var(--text2)';
   document.getElementById('details-coach-edit-btn').style.display = '';
   document.getElementById('details-coach-save-btn').style.display = 'none';
-  // Reset password fields
-  cancelChangePw();
   // Show data folder for Electron
   const folderRow = document.getElementById('details-folder-row');
   if (window.electronAPI && folderRow) {
