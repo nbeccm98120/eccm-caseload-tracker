@@ -5129,7 +5129,6 @@ async function launchApp() {
     window.runAutoBackup = runAutoBackup; // expose for testing
 
     // Show autosave overlay then close
-    window.electronAPI.onAppClosing(async () => {
 
     // ── Auto-update event listeners ────────────────────────────
     if (window.electronAPI.onUpdateStatus) {
@@ -5167,6 +5166,7 @@ async function launchApp() {
     }
 
 
+    window.electronAPI.onAppClosing(async () => {
       // Show the overlay immediately
       const overlay = document.getElementById('autosave-overlay');
       if (overlay) overlay.classList.add('show');
