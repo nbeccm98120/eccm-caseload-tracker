@@ -20,7 +20,12 @@ try {
   autoUpdater.on('update-not-available', (info) => sendUpdateStatus('not-available', info));
   autoUpdater.on('download-progress', (progress) => sendUpdateStatus('downloading', progress));
   autoUpdater.on('update-downloaded', (info) => sendUpdateStatus('downloaded', info));
-  autoUpdater.on('error', (err) => { console.error('Update error:', err); sendUpdateStatus('error', {}); });
+  autoUpdater.on('error', (err) => { 
+    console.error('Update error full:', err);
+    console.error('Update error message:', err?.message);
+    console.error('Update error stack:', err?.stack);
+    sendUpdateStatus('error', { message: err?.message }); 
+  });
 } catch(e) {
   console.log('electron-updater not available (dev mode):', e.message);
 }

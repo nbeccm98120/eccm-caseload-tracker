@@ -5160,7 +5160,7 @@ async function launchApp() {
             <button type="button" class="btn btn-sm" onclick="window.electronAPI.installUpdate()">Restart &amp; Install Now</button>
           </div>`;
         } else if (status === 'error') {
-          el.innerHTML = '<span style="color:var(--red);font-size:11px">⚠ Update check failed — check your connection</span>';
+          el.innerHTML = `<span style="color:var(--red);font-size:11px">Update check failed: ${info?.message || 'check your connection'}</span>`;
         }
       });
     }
