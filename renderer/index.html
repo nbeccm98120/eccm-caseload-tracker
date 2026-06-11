@@ -1515,8 +1515,7 @@ async function openAppDetails() {
     // Show update section
     document.getElementById('update-section').style.display = '';
     document.getElementById('update-row').style.display = '';
-    document.getElementById('update-status').textContent = 'Checking for updates…';
-    window.electronAPI.checkForUpdates();
+    // Status already set by background check — don't re-trigger
   }
   openModal('appDetailsModal');
 }
@@ -5094,6 +5093,10 @@ async function launchApp() {
   updateUnsavedBanner();
   render();
   renderDashboard();
+  // Check for updates silently on launch (small delay so app is fully visible first)
+  if (window.electronAPI?.checkForUpdates) {
+    setTimeout(() => window.electronAPI.checkForUpdates(), 3000);
+  }
   if (window.electronAPI) {
     const btn = document.getElementById('set-backup-folder-btn');
     if (btn) btn.style.display = '';
