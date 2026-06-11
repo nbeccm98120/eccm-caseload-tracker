@@ -15,6 +15,10 @@ try {
   autoUpdater = require('electron-updater').autoUpdater;
   autoUpdater.autoDownload = false;
   autoUpdater.autoInstallOnAppQuit = true;
+  // Force update check in dev mode for debugging
+  if (!app.isPackaged) {
+    autoUpdater.forceDevUpdateConfig = true;
+  }
   autoUpdater.on('checking-for-update', () => sendUpdateStatus('checking', {}));
   autoUpdater.on('update-available', (info) => sendUpdateStatus('available', info));
   autoUpdater.on('update-not-available', (info) => sendUpdateStatus('not-available', info));
@@ -276,6 +280,7 @@ ipcMain.handle('close-confirmed', () => {
 });
 
 ipcMain.handle('mark-unsaved', () => true);
+ipcMain.handle('get-app-version', () => app.getVersion());
 ipcMain.handle('open-folder', (event, p) => { shell.openPath(p); });
 
 // ── Auto-update IPC ───────────────────────────────────────────

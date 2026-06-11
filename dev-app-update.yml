@@ -1,0 +1,11 @@
+version: 1.2.2
+files:
+  - url: ECCM-Caseload-Tracker-Setup-1.2.2.exe
+    sha512: dSeSDivJC4Hj56mBffYeJ20f3R/w7UrTsTwAHWTSQYHqDHLU3B6SegbcRbmVm27aKeaVEmRCZtyDSHsuqWB1gg==
+    size: 76508687
+path: ECCM-Caseload-Tracker-Setup-1.2.2.exe
+sha512: dSeSDivJC4Hj56mBffYeJ20f3R/w7UrTsTwAHWTSQYHqDHLU3B6SegbcRbmVm27aKeaVEmRCZtyDSHsuqWB1gg==
+releaseDate: '2026-06-11T15:34:09.296Z'
+provider: github
+owner: nbeccm98120
+repo: eccm-caseload-tracker

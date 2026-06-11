@@ -467,6 +467,14 @@ tbody tr.mr-critical td{}
   <button type="button" onclick="exportBackup()" style="background:#fff;color:#dc2626;border:none;border-radius:6px;padding:5px 14px;font-weight:700;font-size:12px;cursor:pointer;white-space:nowrap">Save Backup Now</button>
 </div>
 <div class="app" id="app" style="display:none">
+  <!-- Update notification banner -->
+  <div id="update-banner" style="display:none;background:var(--accent);color:#fff;padding:8px 16px;font-size:12px;font-weight:600;display:none;align-items:center;justify-content:space-between;gap:12px;flex-shrink:0">
+    <span id="update-banner-text">🔔 A new update is available</span>
+    <div style="display:flex;gap:8px;align-items:center">
+      <button type="button" onclick="openAppDetails()" style="background:#fff;color:var(--accent);border:none;border-radius:4px;padding:4px 12px;font-size:11px;font-weight:700;cursor:pointer">View Update</button>
+      <button type="button" onclick="document.getElementById('update-banner').style.display='none'" style="background:none;border:none;color:#fff;cursor:pointer;font-size:16px;line-height:1">✕</button>
+    </div>
+  </div>
   <div class="topbar">
     <div class="topbar-brand">
       <div class="topbar-icon">📋</div>
@@ -1443,7 +1451,7 @@ tbody tr.mr-critical td{}
 // ================================================================
 // VERSION MANAGEMENT
 // ================================================================
-const APP_VERSION = '1.2.2';
+let APP_VERSION = '1.2.3'; // overwritten at runtime by main process via getAppVersion
 // VERSION_CHECK_URL: set this to the URL of your version.json on SharePoint once hosted.
 // version.json should contain: {"version":"1.0.0","releaseNotes":"What changed"}
 // Leave blank to disable version checking (local file mode).
@@ -5138,6 +5146,12 @@ async function launchApp() {
         if (status === 'checking') {
           el.innerHTML = '<span style="color:var(--text3)">Checking for updates…</span>';
         } else if (status === 'available') {
+          // Show banner
+          const banner = document.getElementById('update-banner');
+          if (banner) {
+            document.getElementById('update-banner-text').textContent = `🔔 Version ${info.version} is available`;
+            banner.style.display = 'flex';
+          }
           const notes = info?.releaseNotes ? `<div style="margin-top:8px;font-size:11px;color:var(--text2);background:var(--surface2);border-radius:6px;padding:8px 10px;max-height:120px;overflow-y:auto">${info.releaseNotes}</div>` : '';
           el.innerHTML = `<div style="display:flex;flex-direction:column;gap:8px">
             <div style="font-size:13px;font-weight:600;color:var(--accent)">🔔 Version ${info.version} is available</div>
@@ -5516,6 +5530,12 @@ function doExportBackupBrowser() {
 // INIT
 // ================================================================
 document.addEventListener('DOMContentLoaded', async function() {
+
+  // Get app version from main process (keeps in sync with package.json automatically)
+  if (window.electronAPI?.getAppVersion) {
+    const v = await window.electronAPI.getAppVersion();
+    if (v) APP_VERSION = v;
+  }
 
   // Modal backdrop
   document.querySelectorAll('.modal-overlay').forEach(el =>

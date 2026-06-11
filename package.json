@@ -1,6 +1,6 @@
 {
   "name": "eccm-caseload-tracker",
-  "version": "1.2.3",
+  "version": "1.2.0",
   "description": "ECCM SC Caseload Tracker",
   "author": "Erie County Care Management",
   "main": "main.js",
@@ -21,21 +21,25 @@
     "win": {
       "target": "nsis",
       "icon": "assets/icon.ico",
-      "signAndEditExecutable": false
+      "signAndEditExecutable": false,
+      "executableName": "ECCM Caseload Tracker"
     },
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
-      "createStartMenuShortcut": true
+      "createStartMenuShortcut": true,
+      "uninstallDisplayName": "ECCM Caseload Tracker"
     },
     "publish": {
       "provider": "github",
-      "owner": "nbeccm98120",
-      "repo": "eccm-caseload-tracker"
+      "owner": "PLACEHOLDER_USERNAME",
+      "repo": "eccm-caseload-tracker",
+      "updaterCacheDirName": "eccm-caseload-tracker-updater"
     },
     "directories": {
       "output": "dist"
-    }
+    },
+    "artifactName": "${productName}-Setup-${version}.${ext}"
   }
 }

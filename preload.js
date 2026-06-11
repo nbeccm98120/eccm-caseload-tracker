@@ -14,6 +14,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   exportExcel:        (args)  => ipcRenderer.invoke('export-excel', args),
   closeConfirmed:     ()      => ipcRenderer.invoke('close-confirmed'),
   markUnsaved:        ()      => ipcRenderer.invoke('mark-unsaved'),
+  getAppVersion:      ()      => ipcRenderer.invoke('get-app-version'),
   openFolder:         (p)     => ipcRenderer.invoke('open-folder', p),
   onAppClosing:       (cb)    => ipcRenderer.on('app-closing', cb),
   // Auto-update
