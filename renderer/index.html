@@ -469,7 +469,7 @@ tbody tr.mr-critical td{}
 <div class="app" id="app" style="display:none">
   <!-- Update notification banner -->
   <div id="update-banner" style="display:none;background:var(--accent);color:#fff;padding:8px 16px;font-size:12px;font-weight:600;display:none;align-items:center;justify-content:space-between;gap:12px;flex-shrink:0">
-    <span id="update-banner-text">🔔 A new update is available</span>
+    <span id="update-banner-text">🔔 A new update is available — <span style="font-weight:400;opacity:.9">your caseload data will not be affected</span></span>
     <div style="display:flex;gap:8px;align-items:center">
       <button type="button" onclick="openAppDetails()" style="background:#fff;color:var(--accent);border:none;border-radius:4px;padding:4px 12px;font-size:11px;font-weight:700;cursor:pointer">View Update</button>
       <button type="button" onclick="document.getElementById('update-banner').style.display='none'" style="background:none;border:none;color:#fff;cursor:pointer;font-size:16px;line-height:1">✕</button>
@@ -5152,12 +5152,13 @@ async function launchApp() {
           // Show banner
           const banner = document.getElementById('update-banner');
           if (banner) {
-            document.getElementById('update-banner-text').textContent = `🔔 Version ${info.version} is available`;
+            document.getElementById('update-banner-text').innerHTML = `🔔 Version ${info.version} is available — <span style="font-weight:400;opacity:.9">your caseload data will not be affected</span>`;
             banner.style.display = 'flex';
           }
           const notes = info?.releaseNotes ? `<div style="margin-top:8px;font-size:11px;color:var(--text2);background:var(--surface2);border-radius:6px;padding:8px 10px;max-height:120px;overflow-y:auto">${info.releaseNotes}</div>` : '';
           el.innerHTML = `<div style="display:flex;flex-direction:column;gap:8px">
             <div style="font-size:13px;font-weight:600;color:var(--accent)">🔔 Version ${info.version} is available</div>
+            <div style="font-size:11px;color:var(--green);font-weight:500">✓ Your caseload data will not be affected by this update</div>
             ${notes}
             <div style="display:flex;gap:8px;margin-top:4px">
               <button type="button" class="btn btn-sm" onclick="startUpdate()">Download &amp; Install</button>
