@@ -1,10 +1,103 @@
 const { app, BrowserWindow, ipcMain, dialog, shell } = require('electron');
 const path = require('path');
 const fs = require('fs');
+const https = require('https');
 
 const userDataPath = app.getPath('userData');
 const dataFile     = path.join(userDataPath, 'caseload_data.json');
 const settingsFile = path.join(userDataPath, 'settings.json');
+const pendingAzureFile = path.join(userDataPath, 'pending_azure_upload.json');
+
+// ── Azure Blob Storage config ──────────────────────────────────
+// Loaded from config.json alongside the app — never hardcoded in
+// source so the SAS key doesn't end up in the git repo.
+// config.json format:
+// {
+//   "azureSasBase": "https://eccmcaseloadbackups.blob.core.windows.net",
+//   "azureContainer": "sc-backups",
+//   "azureSasQuery": "sv=2026-...&sig=..."
+// }
+let AZURE_SAS_BASE = null;
+let AZURE_CONTAINER = null;
+let AZURE_SAS_QUERY = null;
+
+try {
+  const configPath = path.join(app.getAppPath(), 'config.json');
+  if (fs.existsSync(configPath)) {
+    const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+    AZURE_SAS_BASE = config.azureSasBase || null;
+    AZURE_CONTAINER = config.azureContainer || null;
+    AZURE_SAS_QUERY = config.azureSasQuery || null;
+    console.log('Azure config loaded from config.json');
+  } else {
+    console.warn('config.json not found — Azure sync disabled');
+  }
+} catch (e) {
+  console.error('Failed to load config.json:', e.message);
+}
+
+function azureBlobUrl(filename) {
+  if (!AZURE_SAS_BASE || !AZURE_CONTAINER || !AZURE_SAS_QUERY) return null;
+  return `${AZURE_SAS_BASE}/${AZURE_CONTAINER}/${encodeURIComponent(filename)}?${AZURE_SAS_QUERY}`;
+}
+
+function uploadToAzure(filename, jsonString) {
+  return new Promise((resolve) => {
+    const blobUrl = azureBlobUrl(filename);
+    if (!blobUrl) {
+      resolve({ success: false, error: 'Azure not configured — config.json missing or incomplete' });
+      return;
+    }
+    try {
+      const url = new URL(blobUrl);
+      const body = Buffer.from(jsonString, 'utf8');
+      const req = https.request({
+        hostname: url.hostname,
+        path: url.pathname + url.search,
+        method: 'PUT',
+        headers: {
+          'x-ms-blob-type': 'BlockBlob',
+          'Content-Type': 'application/json',
+          'Content-Length': body.length
+        },
+        timeout: 9000
+      }, (res) => {
+        let data = '';
+        res.on('data', c => data += c);
+        res.on('end', () => {
+          if (res.statusCode >= 200 && res.statusCode < 300) {
+            resolve({ success: true });
+          } else {
+            resolve({ success: false, error: `Azure returned ${res.statusCode}: ${data.slice(0,200)}` });
+          }
+        });
+      });
+      req.on('error', (e) => resolve({ success: false, error: e.message }));
+      req.on('timeout', () => { req.destroy(); resolve({ success: false, error: 'Azure upload timed out' }); });
+      req.write(body);
+      req.end();
+    } catch (e) {
+      resolve({ success: false, error: e.message });
+    }
+  });
+}
+
+function savePendingAzureUpload(filename, jsonString) {
+  try {
+    fs.writeFileSync(pendingAzureFile, JSON.stringify({ filename, data: jsonString, queuedAt: new Date().toISOString() }), 'utf8');
+  } catch (e) { console.error('Failed to queue pending Azure upload:', e); }
+}
+
+function clearPendingAzureUpload() {
+  try { if (fs.existsSync(pendingAzureFile)) fs.unlinkSync(pendingAzureFile); } catch (e) {}
+}
+
+function getPendingAzureUpload() {
+  try {
+    if (!fs.existsSync(pendingAzureFile)) return null;
+    return JSON.parse(fs.readFileSync(pendingAzureFile, 'utf8'));
+  } catch (e) { return null; }
+}
 
 let mainWindow;
 let isClosing = false;
@@ -101,7 +194,7 @@ function createWindow() {
     setTimeout(() => {
       console.log('Safety timeout fired - forcing exit');
       app.exit(0);
-    }, 8000);
+    }, 15000);
   });
   mainWindow.webContents.on('context-menu', (e) => { e.preventDefault(); });
   mainWindow.setMenu(null);
@@ -174,6 +267,25 @@ ipcMain.handle('export-backup-manual', async (event, { userName }) => {
   } catch(e) { return { success: false, error: e.message }; }
 });
 
+// One-time migration cleanup — removes the old pre-UID backup file
+// from the Records Folder once the new UID-suffixed file has been
+// written, so SCs don't end up with two stale-looking backup files
+// sitting side by side after updating to 1.4.0+.
+ipcMain.handle('rename-old-backup', (event, { folderPath, oldUserId, newUserId }) => {
+  try {
+    const oldFilename = 'ECCM_Caseload_Backup_' + oldUserId + '.json';
+    const oldPath = path.join(folderPath, oldFilename);
+    if (oldUserId !== newUserId && fs.existsSync(oldPath)) {
+      fs.unlinkSync(oldPath);
+      console.log('Migration cleanup: removed old backup file', oldFilename);
+    }
+    return { success: true };
+  } catch (e) {
+    console.error('Migration cleanup error:', e);
+    return { success: false, error: e.message };
+  }
+});
+
 ipcMain.handle('export-backup-auto', (event, { userName, folderPath }) => {
   try {
     const filename = 'ECCM_Caseload_Backup_' + (userName||'User').replace(/\s+/g,'_') + '.json';
@@ -183,6 +295,47 @@ ipcMain.handle('export-backup-auto', (event, { userName, folderPath }) => {
     writeNamedBackup(userName);
     return { success: true, path: destPath };
   } catch(e) { console.error('Auto-sync error:', e); return { success: false, error: e.message }; }
+});
+
+// ── Azure Blob Storage sync ───────────────────────────────────
+// Third backup tier. Same filename convention as the Records Folder
+// copy, so the Supervisor View reads the same name from Azure.
+// On failure (no internet, SAS issue, etc), the upload is queued to
+// disk and automatically retried on the next successful attempt or
+// app launch — local and Records Folder saves are never blocked by
+// Azure being unreachable.
+ipcMain.handle('sync-to-azure', async (event, { userName, jsonString }) => {
+  const filename = 'ECCM_Caseload_Backup_' + (userName||'User').replace(/\s+/g,'_') + '.json';
+  const result = await uploadToAzure(filename, jsonString);
+  if (result.success) {
+    clearPendingAzureUpload();
+    console.log('Azure sync succeeded:', filename);
+    return { success: true };
+  } else {
+    savePendingAzureUpload(filename, jsonString);
+    console.error('Azure sync failed, queued for retry:', result.error);
+    return { success: false, error: result.error, queued: true };
+  }
+});
+
+// Called on app launch (and can be called any time) to flush a
+// previously-failed Azure upload if one is queued.
+ipcMain.handle('retry-pending-azure', async () => {
+  const pending = getPendingAzureUpload();
+  if (!pending) return { success: true, hadPending: false };
+  const result = await uploadToAzure(pending.filename, pending.data);
+  if (result.success) {
+    clearPendingAzureUpload();
+    console.log('Pending Azure upload flushed successfully:', pending.filename);
+    return { success: true, hadPending: true };
+  } else {
+    console.error('Pending Azure upload retry failed, still queued:', result.error);
+    return { success: false, hadPending: true, error: result.error };
+  }
+});
+
+ipcMain.handle('has-pending-azure', () => {
+  return !!getPendingAzureUpload();
 });
 
 ipcMain.handle('import-backup', async () => {
@@ -264,18 +417,12 @@ ipcMain.handle('export-excel', async (event, { data, filename }) => {
 
 // ── Close / Sync ──────────────────────────────────────────────
 ipcMain.handle('close-confirmed', () => {
-  console.log('Close confirmed - syncing and exiting');
-  try {
-    const settings = getSettings();
-    if (settings.backupFolder && fs.existsSync(dataFile)) {
-      const data = JSON.parse(fs.readFileSync(dataFile, 'utf8'));
-      const userName = (data?.user?.name || 'User').replace(/\s+/g, '_');
-      const destPath = path.join(settings.backupFolder, 'ECCM_Caseload_Backup_' + userName + '.json');
-      fs.copyFileSync(dataFile, destPath);
-      console.log('Auto-sync on close:', destPath, fs.statSync(destPath).size, 'bytes');
-      writeNamedBackup(userName);
-    }
-  } catch(e) { console.error('Sync error on close:', e); }
+  console.log('Close confirmed - exiting');
+  // Records Folder and Azure writes already happened in the renderer's
+  // pre-close handler (onAppClosing) before this was called — that path
+  // correctly uses the UID-suffixed filename via getUserId(). This used
+  // to do its own redundant write here using name-only (no UID), which
+  // would silently undo the UID migration on every close. Removed.
   app.exit(0);
 });
 

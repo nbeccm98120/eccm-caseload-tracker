@@ -787,8 +787,8 @@ tbody tr.mr-critical td{}
               <p><strong>Required fields:</strong> MCI#, First Name, Last Name, and Waiver Type. All four must be filled in to save.</p>
               <p><strong>MCI#</strong> is always 9 digits — shorter numbers are padded automatically (e.g. 32418 → 000032418).</p>
               <p><strong>Status chips:</strong> Use <strong>Active</strong> for current consumers. Use <strong>Inactive</strong> for consumers who have closed services, transferred to another SCO, or moved to a different SC within ECCM. Inactive consumers are hidden from all tracker views but remain in your records for history.</p>
+              <p><strong>Moving a consumer to Inactive:</strong> Open the consumer, click <strong>Move to Inactive</strong> in the footer. Use this for closed services, transfers, or SCO changes — not deletion. The consumer's full history is retained. When editing an Inactive consumer, a <strong>Scheduled Removal</strong> date is shown — inactive consumers are automatically and permanently removed after 6 months.</p>
               <p><strong>Comments / Notes:</strong> Click the 💬 button on any consumer row to view or add notes. Notes are visible in the caseload list and can be edited at any time.</p>
-              <p><strong>Deleting a consumer:</strong> Only do this if a consumer was added by mistake. If a consumer closed or transferred, use Inactive status instead. Deletion permanently removes ALL their monitoring, ISP, PUNS, Emergency, and A/B history and cannot be undone.</p>
               <p><strong>Filtering and sorting:</strong> Each table has a small <strong>▾</strong> arrow on the Waiver and Status column headers. Click it to filter by that column or sort the list. When a filter is active a <strong>⊘ Filtered ✕</strong> badge appears next to the search bar — click it to clear all filters. Use the search bar to find consumers by name or MCI# — an <strong>✕</strong> button appears to clear the search quickly.</p>
             </div>
           </div>
@@ -1120,8 +1120,9 @@ tbody tr.mr-critical td{}
             <option>Other</option>
           </select>
         </div>
-        <div class="form-group"><label>Status</label>
-          <select id="f-status"><option value="Active">Active</option><option value="Inactive">Inactive</option></select>
+        <div class="form-group full" id="inactive-removal-row" style="display:none">
+          <label>Scheduled Removal</label>
+          <input type="text" id="inactive-removal-date" readonly style="background:var(--surface2);color:var(--text2);font-size:12px">
         </div>
         <div class="form-group full"><label>Comments / Notes</label><textarea id="f-comments" rows="3" placeholder="Optional notes about this consumer…"></textarea></div>
 
@@ -1131,14 +1132,9 @@ tbody tr.mr-critical td{}
     <div class="modal-footer" style="flex-direction:column;gap:0;padding:0">
       <div style="display:flex;justify-content:flex-end;gap:10px;padding:16px 24px;border-top:1px solid var(--border)">
         <button type="button" class="btn btn-neutral" onclick="closeModal('clientModal')">Cancel</button>
+        <button type="button" class="btn btn-neutral btn-sm" id="move-to-inactive-btn" onclick="moveClientToInactive()" style="display:none">Move to Inactive</button>
+        <button type="button" class="btn btn-neutral btn-sm" id="move-to-active-btn" onclick="moveClientToActive()" style="display:none">Move to Active</button>
         <button type="button" class="btn" onclick="saveClient()">Save Consumer</button>
-      </div>
-      <div id="client-delete-section" style="display:none;padding:12px 24px 16px;border-top:1px solid var(--border);background:var(--red-light);border-radius:0 0 var(--radius) var(--radius)">
-        <p style="font-size:12px;color:var(--red);margin-bottom:8px">⚠️ <strong>Permanent delete</strong> — only use if this consumer was added by mistake. If the consumer has closed, transferred to another SCO, or moved to a different SC, use <strong>Inactive</strong> status instead. This removes ALL their monitoring, ISP, PUNS, and Emergency history and cannot be undone.</p>
-        <button type="button" class="btn btn-danger btn-sm" onclick="deleteClientFromModal()">Permanently Delete Consumer</button>
-      </div>
-      <div style="padding:8px 24px 12px;border-top:1px solid var(--border)" id="client-delete-toggle-row">
-        <button type="button" class="btn btn-neutral btn-sm" id="client-delete-toggle" onclick="toggleClientDelete()" style="font-size:11px;color:var(--text3)">⚠ Delete this consumer (mistakes only)</button>
       </div>
     </div>
   </div>
@@ -1176,12 +1172,13 @@ tbody tr.mr-critical td{}
           <label>Last Synced</label>
           <input type="text" id="details-backup" readonly style="background:var(--surface2);color:var(--text2)">
         </div>
+        <div class="form-group">
+          <label>Cloud Backup</label>
+          <input type="text" id="details-azure" readonly style="background:var(--surface2);color:var(--text2)">
+        </div>
         <div class="form-group full" id="details-folder-row" style="display:none">
           <label>Records Folder</label>
-          <div style="display:flex;gap:8px;align-items:center">
-            <input type="text" id="details-folder" readonly style="background:var(--surface2);color:var(--text2);flex:1;font-size:11px">
-            <button type="button" class="btn btn-neutral btn-sm" onclick="openFolder()" id="details-open-folder-btn" style="display:none">📂</button>
-          </div>
+          <input type="text" id="details-folder" readonly style="background:var(--surface2);color:var(--text2);width:100%;font-size:11px">
         </div>
         <div class="form-section" id="update-section" style="display:none">Updates</div>
         <div class="form-group full" id="update-row" style="display:none">
@@ -1494,13 +1491,12 @@ async function openAppDetails() {
     const settings = await window.electronAPI.loadSettings();
     document.getElementById('details-folder').value = settings.backupFolder || 'Not set — go to Actions → Set Records Folder';
     folderRow.style.display = '';
-    const openBtn = document.getElementById('details-open-folder-btn');
-    if (openBtn && settings.backupFolder) openBtn.style.display = '';
     // Show update section
     document.getElementById('update-section').style.display = '';
     document.getElementById('update-row').style.display = '';
     // Status already set by background check — don't re-trigger
   }
+  updateAzureStatusLabel();
   openModal('appDetailsModal');
 }
 
@@ -1834,28 +1830,32 @@ function setupUser() {
   const name  = document.getElementById('setup-name').value.trim();
   const coach = document.getElementById('setup-coach').value.trim();
   if (!name) return toast('Please enter your name', true);
-  S.user = { name, coach };
+  S.user = { name, coach, uid: generateUidSuffix() };
   save();
   launchApp();
 }
 
-
 function updateBackupLabel() {
   const el = document.getElementById('backup-label');
-  if (!el) return;
-
-  if (!S.meta?.lastBackupAt) {
-    el.textContent = 'Last Saved: Never';
-    return;
+  if (el) {
+    if (!S.meta?.lastBackupAt) {
+      el.textContent = 'Last Saved: Never';
+    } else {
+      const d = new Date(S.meta.lastBackupAt);
+      el.textContent = isNaN(d) ? 'Last Saved: Unknown'
+        : `Last Saved: ${d.toLocaleDateString()} ${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+    }
   }
+  updateAzureStatusLabel();
+}
 
-  const d = new Date(S.meta.lastBackupAt);
-  if (isNaN(d)) {
-    el.textContent = 'Last Saved: Unknown';
-    return;
-  }
-
-  el.textContent = `Last Saved: ${d.toLocaleDateString()} ${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+async function updateAzureStatusLabel() {
+  const el = document.getElementById('details-azure');
+  if (!el || !window.electronAPI?.hasPendingAzure) return;
+  try {
+    const hasPending = await window.electronAPI.hasPendingAzure();
+    el.value = hasPending ? '⏳ Pending — will retry automatically' : '✅ Synced';
+  } catch (e) { el.value = '—'; }
 }
 // ================================================================
 // UTILS
@@ -1882,9 +1882,23 @@ const addYrs   = (d,n) => {
 };
 const diffDays = (a,b) => Math.round((a-b)/86400000);
 // Returns the permanent backup ID for this user — generated once at setup, never changes
+// Generates a short random suffix once at setup, e.g. "a3f9".
+// This is appended to the SC's name to make backup filenames
+// collision-proof even if two SCs share an identical name.
+// It must NEVER regenerate after first set, or the Supervisor
+// View loses track of this SC's file.
+function generateUidSuffix() {
+  return Math.random().toString(36).slice(2, 6);
+}
+
+// Returns the name+UID combo used for backup filenames
+// (local copy, Records Folder copy, and Azure all use this).
+// Falls back to name-only if no UID exists yet (pre-1.4.0 installs,
+// handled by a one-time migration in launchApp()).
 function getUserId() {
   if (!S.user) return 'User';
-  return (S.user.name || 'User').trim().replace(/\s+/g, '_');
+  const base = (S.user.name || 'User').trim().replace(/\s+/g, '_');
+  return S.user.uid ? `${base}_${S.user.uid}` : base;
 }
 
 
@@ -3288,17 +3302,31 @@ function openClientModal(mci){
   dobField.value=c?.dob||'';
   dobField.classList.remove('date-invalid');
   document.getElementById('f-waiver').value=c?.waiver||'';
-  document.getElementById('f-status').value=c?.status||'Active';
   document.getElementById('f-comments').value=c?.comments||'';
-  // Reset delete section
-  const delSection = document.getElementById('client-delete-section');
-  const delToggle = document.getElementById('client-delete-toggle');
-  const delToggleRow = document.getElementById('client-delete-toggle-row');
-  if (delSection) delSection.style.display = 'none';
-  if (delToggle) { delToggle.textContent = '⚠ Delete this consumer (mistakes only)'; delToggle.style.color = 'var(--text3)'; }
-  if (delToggleRow) delToggleRow.style.display = c ? 'block' : 'none';
   document.getElementById('f-started').value=c?.startedWithSc||'';
+  // Show the appropriate status action button — only on edit
+  const moveInactiveBtn = document.getElementById('move-to-inactive-btn');
+  const moveActiveBtn = document.getElementById('move-to-active-btn');
+  if (moveInactiveBtn) moveInactiveBtn.style.display = (c && c.status === 'Active') ? 'inline-flex' : 'none';
+  if (moveActiveBtn) moveActiveBtn.style.display = (c && c.status === 'Inactive') ? 'inline-flex' : 'none';
+  // Show scheduled removal date if already Inactive
+  updateInactiveRemovalDisplay(c);
   openModal('clientModal');
+}
+
+function updateInactiveRemovalDisplay(c) {
+  const row = document.getElementById('inactive-removal-row');
+  const dateEl = document.getElementById('inactive-removal-date');
+  if (!row || !dateEl) return;
+  if (c?.status === 'Inactive' && c?.inactiveSince) {
+    const removalDate = new Date(c.inactiveSince);
+    removalDate.setMonth(removalDate.getMonth() + 6);
+    dateEl.value = 'Will be permanently removed on ' + removalDate.toLocaleDateString('en-US', {month:'long', day:'numeric', year:'numeric'});
+    row.style.display = '';
+  } else {
+    row.style.display = 'none';
+    dateEl.value = '';
+  }
 }
 
 function autopadMCI(el) {
@@ -3337,7 +3365,10 @@ function saveClient(){
   const last=document.getElementById('f-last').value.trim();
   const dob=document.getElementById('f-dob').value;
   const waiver=document.getElementById('f-waiver').value;
-  const status=document.getElementById('f-status').value || 'Active';
+  // Status is no longer read from a dropdown — it's controlled exclusively
+  // by the Move to Inactive / Move to Active buttons. On edit, preserve the
+  // current status; on new client, always start as Active.
+  const status = _editMCI ? (S.clients.find(x=>x.mci===_editMCI)?.status || 'Active') : 'Active';
   const comments=document.getElementById('f-comments').value.trim();
   const startedWithSc=document.getElementById('f-started').value;
   const missing = [];
@@ -3357,7 +3388,6 @@ function saveClient(){
   const dateErr = validateAllDatesIn('clientModal');
   if (dateErr) { toast(dateErr, true); return; }
   const wasEdit = !!_editMCI;
-  const prevStatus = wasEdit ? (S.clients.find(x=>x.mci===_editMCI)?.status||'Active') : null;
   if(_editMCI){
     const c=S.clients.find(x=>x.mci===_editMCI);
     const prev={...c};
@@ -3380,36 +3410,41 @@ function saveClient(){
   if (caseloadSearch) caseloadSearch.value = '';
   const caseloadBtn = Array.from(document.querySelectorAll('.nav-btn')).find(btn => btn.textContent.includes('Caseload'));
   showSec('caseload', caseloadBtn || null);
-  // Show helpful toast if consumer was moved to Inactive
-  const savedClient = S.clients.find(x => x.mci === (mci||_editMCI));
-  if (wasEdit && savedClient?.status === 'Inactive' && prevStatus === 'Active') {
-    toast(`${savedClient.last}, ${savedClient.first} moved to Inactive — switch to the Inactive chip to view them`, false, 5000);
-  } else {
-    toast('Consumer saved');
-  }
+  toast('Consumer saved');
 }
 
-function toggleClientDelete() {
-  const section = document.getElementById('client-delete-section');
-  const btn = document.getElementById('client-delete-toggle');
-  const isOpen = section.style.display !== 'none';
-  section.style.display = isOpen ? 'none' : 'block';
-  btn.textContent = isOpen ? '⚠ Delete this consumer (mistakes only)' : '✕ Cancel delete';
-  btn.style.color = isOpen ? 'var(--text3)' : 'var(--red)';
-}
-
-async function deleteClientFromModal() {
+async function moveClientToInactive() {
   if (!_editMCI) return;
   const c = S.clients.find(x => x.mci === _editMCI);
-  if (!await showConfirm(`Permanently delete ${c?.last}, ${c?.first}?\n\nThis removes ALL their monitoring, ISP, PUNS, and Emergency history and cannot be undone.\n\nIf they closed or transferred, use Inactive status instead.`,'Delete Consumer','Delete','btn btn-danger')) return;
-  const _dc = S.clients.find(x=>x.mci===_editMCI);
-  auditEntry(_editMCI,'Client','Deleted',`${_dc?.last}, ${_dc?.first}`);
-  S.clients = S.clients.filter(x => x.mci !== _editMCI);
-  delete S.monitoring[_editMCI];delete S.isp[_editMCI];delete S.puns[_editMCI];delete S.emergency[_editMCI];delete S.abTracker[_editMCI];
+  if (!c) return;
+  if (!await showConfirm(
+    `Move ${c.last}, ${c.first} to Inactive?\n\nUse this when a consumer has closed services, transferred to another SCO, or moved to a different SC. Their history is kept for 6 months then automatically removed.`,
+    'Move to Inactive', 'Yes, Move to Inactive', 'btn btn-primary'
+  )) return;
+  c.status = 'Inactive';
+  if (!c.inactiveSince) c.inactiveSince = new Date().toISOString().slice(0,10);
+  auditEntry(_editMCI, 'Client', 'Moved to Inactive', `${c.last}, ${c.first}`);
   save();
   closeModal('clientModal');
   render();
-  toast('Consumer permanently deleted');
+  toast(`${c.last}, ${c.first} moved to Inactive`);
+}
+
+async function moveClientToActive() {
+  if (!_editMCI) return;
+  const c = S.clients.find(x => x.mci === _editMCI);
+  if (!c) return;
+  c.status = 'Active';
+  c.inactiveSince = null; // reset the purge timer
+  auditEntry(_editMCI, 'Client', 'Moved to Active', `${c.last}, ${c.first}`);
+  save();
+  closeModal('clientModal');
+  render();
+  toast(`${c.last}, ${c.first} moved back to Active`);
+}
+
+async function deleteClientFromModal() {
+  // Removed — use moveClientToInactive() instead.
 }
 
 async function triggerExportSelected() {
@@ -3484,14 +3519,8 @@ async function doExportSelected() {
 
 
 async function deleteClient(mci){
-  if(!await showConfirm('Delete this consumer and all their data?','Delete Consumer','Delete','btn btn-danger')) return;
-  S.clients=S.clients.filter(c=>c.mci!==mci);
-  delete S.monitoring[mci];
-  delete S.isp[mci];
-  delete S.puns[mci];
-  delete S.emergency[mci];
-  delete S.abTracker[mci];
-  save();render();toast('Consumer deleted');
+  // Removed — consumers are moved to Inactive instead, and are
+  // automatically purged after 6 months of being Inactive.
 }
 
 function openMonModal(mci,month,year){
@@ -4261,7 +4290,14 @@ async function confirmSelectiveImport() {
         if (c.waiver)    existing.waiver   = c.waiver;
         if (c.dob)       existing.dob      = c.dob;
         if (c.comments)  existing.comments = c.comments;
-        // startedWithSc and status are NOT updated — they belong to this SC's relationship with the client
+        // startedWithSc is NOT updated — preserves this SC's original relationship date
+        // If this SC had the client as Inactive (transferred away), merging back
+        // means the client is returning to their caseload — restore to Active
+        // and clear the purge timer so the 6-month clock resets cleanly.
+        if (existing.status === 'Inactive') {
+          existing.status = 'Active';
+          existing.inactiveSince = null;
+        }
       }
       // Merge all tracker data — imported wins for matching keys
       const mci = c.mci;
@@ -4298,6 +4334,7 @@ async function confirmSelectiveImport() {
       S.meta.lastBackupAt = new Date().toISOString();
       await window.electronAPI.saveData(S);
       await window.electronAPI.exportBackupAuto({ userName: getUserId(), folderPath: settings.backupFolder });
+      fireAzureSync();
       updateBackupLabel();
     }
   }
@@ -4863,7 +4900,7 @@ function setupStep1() {
     return;
   }
   if (errEl) errEl.style.display = 'none';
-  S.user = { name, coach };
+  S.user = { name, coach, uid: generateUidSuffix() };
   if (!window.electronAPI) {
     save();
     launchApp();
@@ -4933,6 +4970,16 @@ function setupSkipFolder() {
   launchApp();
 }
 
+// Fire-and-forget Azure upload — never awaited by callers, never blocks
+// the local/Records Folder save path. Main process queues a retry on
+// disk automatically if this fails.
+function fireAzureSync() {
+  if (!window.electronAPI?.syncToAzure || !S.user) return;
+  window.electronAPI.syncToAzure({ userName: getUserId(), jsonString: JSON.stringify(S) })
+    .then(r => { if (!r.success) console.warn('Azure sync deferred:', r.error); })
+    .catch(()=>{});
+}
+
 async function autoBackupNow(folderPath) {
   if (!window.electronAPI || !S.user || !S.clients?.length) return;
   try {
@@ -4940,6 +4987,7 @@ async function autoBackupNow(folderPath) {
     S.meta.lastBackupAt = new Date().toISOString();
     await window.electronAPI.saveData(S);
     await window.electronAPI.exportBackupAuto({ userName: getUserId(), folderPath });
+    fireAzureSync();
     updateBackupLabel();
   } catch(e) {
     console.error('Auto backup error:', e);
@@ -4968,6 +5016,7 @@ function startAutoBackupTimer() {
       userName: getUserId(),
       folderPath: settings.backupFolder
     });
+    fireAzureSync();
     _lastAutoBackup = new Date();
     updateBackupLabel();
     console.log('Auto-save completed at', _lastAutoBackup.toLocaleTimeString());
@@ -5042,7 +5091,10 @@ async function recoverFromFile(filePath, scName) {
   closeModal('recoverModal');
   await launchApp();
   render();
-  // Auto-sync immediately so backup folder reflects restored data right away
+  // Auto-sync to local Records Folder so it reflects restored data right away.
+  // Deliberately does NOT push to Azure — restoring from a local/OneDrive
+  // backup could be recovering from a mistake, and we don't want to risk
+  // immediately overwriting Azure with potentially stale restored data.
   if (currentSettings.backupFolder) {
     S.meta.lastBackupAt = new Date().toISOString();
     await window.electronAPI.saveData(S);
@@ -5064,6 +5116,7 @@ async function testAutoBackup() {
     userName: getUserId(),
     folderPath: settings.backupFolder
   });
+  fireAzureSync(); // silent — never mentioned in SC-facing messaging
   if (result?.success) {
     _lastAutoBackup = new Date();
     updateBackupLabel();
@@ -5102,10 +5155,82 @@ async function changeBackupFolder() {
 // ================================================================
 // LAUNCH APP
 // ================================================================
+// Purges Inactive clients whose inactiveSince date is > 6 months ago.
+// Runs silently on every launch before rendering.
+// Any Inactive client with no inactiveSince gets stamped today (so
+// pre-existing inactive clients purge 6 months from the update date,
+// not immediately).
+function purgeOldInactiveClients() {
+  const today = new Date();
+  const cutoff = new Date(today);
+  cutoff.setMonth(cutoff.getMonth() - 6);
+  let purged = 0;
+
+  S.clients = (S.clients || []).filter(c => {
+    if (c.status !== 'Inactive') return true;
+    // Stamp inactiveSince if missing (pre-update clients)
+    if (!c.inactiveSince) {
+      c.inactiveSince = today.toISOString().slice(0,10);
+      return true; // keep — their 6-month clock starts now
+    }
+    const since = new Date(c.inactiveSince);
+    if (since <= cutoff) {
+      // Purge — remove all associated data
+      delete S.monitoring[c.mci];
+      delete S.isp[c.mci];
+      delete S.puns[c.mci];
+      delete S.emergency[c.mci];
+      delete S.abTracker[c.mci];
+      purged++;
+      return false;
+    }
+    return true;
+  });
+
+  if (purged > 0) {
+    save();
+    return purged;
+  }
+  return 0;
+}
+
 async function launchApp() {
   document.getElementById('setup-screen').style.display = 'none';
+  // One-time migration: existing installs (pre-1.4.0) have no S.user.uid.
+  // Assign one now so backup filenames become collision-proof going
+  // forward, and clean up the old un-suffixed file so it doesn't sit
+  // orphaned in the Records Folder once the new named file appears.
+  if (S.user && !S.user.uid) {
+    const oldUserId = getUserId(); // name-only, before uid is set
+    S.user.uid = generateUidSuffix();
+    save();
+    if (window.electronAPI) {
+      await window.electronAPI.saveData(S);
+      const settings = await window.electronAPI.loadSettings();
+      if (settings.backupFolder) {
+        // Write the new UID-suffixed file first, then remove the old one
+        await window.electronAPI.exportBackupAuto({ userName: getUserId(), folderPath: settings.backupFolder });
+        if (window.electronAPI.renameOldBackup) {
+          window.electronAPI.renameOldBackup({
+            folderPath: settings.backupFolder,
+            oldUserId,
+            newUserId: getUserId()
+          }).catch(()=>{});
+        }
+      }
+      fireAzureSync();
+    }
+  }
   // Clear all table bodies so stale data never flashes on screen
   ['caseload-body','isp-body','puns-body','emerg-body','ab-body','mon-body','dash-body'].forEach(id=>{ const el=document.getElementById(id); if(el) el.innerHTML=''; });
+
+  // Purge Inactive clients older than 6 months — runs silently before
+  // anything renders. Stamps inactiveSince on any pre-existing Inactive
+  // clients that don't have it yet (their 6-month clock starts today).
+  const purgedCount = purgeOldInactiveClients();
+  if (purgedCount > 0) {
+    toast(`${purgedCount} inactive consumer${purgedCount !== 1 ? 's' : ''} automatically removed after 6 months`, false, 5000);
+  }
   document.getElementById('app').style.display = 'flex';
   document.getElementById('dash-date').textContent = new Date().toLocaleDateString('en-US',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
   updateBackupLabel();
@@ -5139,25 +5264,33 @@ async function launchApp() {
         S.meta.lastBackupAt = new Date().toISOString();
         await window.electronAPI.saveData(S);
         await window.electronAPI.exportBackupAuto({ userName: getUserId(), folderPath: settings.backupFolder });
+        fireAzureSync();
         updateBackupLabel();
       }
     }
     // 15-minute auto-backup timer
     startAutoBackupTimer();
-    // Listen for close event — auto-backup then close
-    // 15-minute auto-backup timer
-    async function runAutoBackup() {
-      try {
-        const cfg = await window.electronAPI.loadSettings();
-        if (cfg.backupFolder && S.user && S.clients && S.clients.length) {
-          await window.electronAPI.saveData(S);
-          await window.electronAPI.exportBackupAuto({ userName: S.user.name, folderPath: cfg.backupFolder });
-          console.log('15-min auto-backup complete');
-        }
-      } catch(e) { console.error('Auto-backup timer error:', e); }
+    // Flush any Azure upload that failed in a previous session
+    if (window.electronAPI.retryPendingAzure) {
+      window.electronAPI.retryPendingAzure()
+        .then(r => { if (r.hadPending) console.log('Pending Azure upload retry:', r.success ? 'succeeded' : 'still failing'); })
+        .catch(()=>{});
     }
-    setInterval(runAutoBackup, 7 * 60 * 1000);
-    window.runAutoBackup = runAutoBackup; // expose for testing
+    // If local data is ahead of the last backup (e.g. SC closed normally
+    // but the timer hadn't fired yet, or the app was force-closed), sync
+    // immediately on launch rather than waiting up to 7 minutes.
+    // This ensures the coach always sees current data as soon as the SC
+    // opens the app, not up to 7 minutes after their first edit.
+    const _launchLastSave = S.meta?.lastSaveAt ? new Date(S.meta.lastSaveAt) : null;
+    const _launchLastBackup = S.meta?.lastBackupAt ? new Date(S.meta.lastBackupAt) : null;
+    if (_launchLastSave && (!_launchLastBackup || _launchLastSave > _launchLastBackup)) {
+      const _launchSettings = await window.electronAPI.loadSettings();
+      if (_launchSettings.backupFolder) {
+        autoBackupNow(_launchSettings.backupFolder)
+          .catch(()=>{});
+      }
+    }
+    // Listen for close event — auto-backup then close
 
     // Show autosave overlay then close
 
@@ -5217,8 +5350,30 @@ async function launchApp() {
         S.meta = S.meta || {};
         S.meta.lastBackupAt = new Date().toISOString();
         await window.electronAPI.saveData(S);
+
+        // Final Records Folder write before exit — this was previously
+        // missing, so the Records Folder/Azure copies could lag behind
+        // by however long since the last 7-min tick.
+        const settings = await window.electronAPI.loadSettings();
+        if (settings.backupFolder) {
+          await window.electronAPI.exportBackupAuto({ userName: getUserId(), folderPath: settings.backupFolder });
+        }
         updateBackupLabel();
       } catch(e) { console.error('Pre-close save error:', e); }
+
+      // Azure upload — awaited with a generous timeout since this is what
+      // the coach actually sees. The main process's safety timeout is 15s;
+      // we cap at 10s here to leave room for the "done" pause and the
+      // final closeConfirmed() round-trip. If it still doesn't finish in
+      // time, main.js's queued-retry logic picks it up on next launch.
+      if (window.electronAPI.syncToAzure) {
+        try {
+          await Promise.race([
+            window.electronAPI.syncToAzure({ userName: getUserId(), jsonString: JSON.stringify(S) }),
+            new Promise(resolve => setTimeout(resolve, 10000))
+          ]);
+        } catch(e) { /* queued for retry on next launch regardless */ }
+      }
 
       // Show "done" state briefly before closing
       const saving = document.getElementById('autosave-saving');
@@ -5499,13 +5654,23 @@ async function doExportClients() {
       if (setInactive) {
         activeExported.forEach(c => {
           const client = S.clients.find(x => x.mci === c.mci);
-          if (client) client.status = 'Inactive';
+          if (client) {
+            client.status = 'Inactive';
+            if (!client.inactiveSince) client.inactiveSince = new Date().toISOString().slice(0,10);
+          }
         });
         save();
         renderCaseload();
         toast(activeExported.length + ' client(s) set to Inactive');
       }
     }
+  }
+
+  // Sync to Records Folder and Azure after any export — the coach needs
+  // to see the current state immediately, not at the next 7-minute tick.
+  if (exportSuccess && window.electronAPI) {
+    const _expSettings = await window.electronAPI.loadSettings();
+    if (_expSettings.backupFolder) autoBackupNow(_expSettings.backupFolder).catch(()=>{});
   }
 }
 
