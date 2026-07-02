@@ -296,10 +296,6 @@ input[type="date"]::-webkit-calendar-picker-indicator{cursor:pointer;}
 .mon-tooltip-row:last-child{border:none;}
 
 /* ── TOAST ── */
-#version-banner{position:fixed;top:0;left:0;right:0;z-index:9998;background:#1e40af;color:#fff;padding:10px 20px;display:flex;align-items:center;justify-content:space-between;gap:12px;font-size:13px;font-weight:500;transform:translateY(-100%);transition:transform .4s cubic-bezier(.34,1.56,.64,1);box-shadow:0 4px 12px rgba(0,0,0,.2);}
-#version-banner.show{transform:translateY(0);}
-#version-banner .vb-msg{flex:1;}
-#version-banner .vb-actions{display:flex;gap:8px;align-items:center;}
 #autosave-overlay{
   display:none;
   position:fixed;inset:0;
@@ -456,7 +452,6 @@ tbody tr.mr-critical td{}
 </div>
 
 <!-- MAIN APP -->
-<div id="version-banner"></div>
 <div id="autosave-overlay">
   <div class="autosave-box">
     <div id="autosave-saving">
@@ -485,7 +480,7 @@ tbody tr.mr-critical td{}
       <div class="topbar-name">ECCM Caseload Tracker <span>SC Edition</span></div>
     </div>
     <nav class="nav">
-      <button type="button" class="nav-btn active" onclick="showSec('dashboard',this)">📊 Dashboard</button>
+      <button type="button" class="nav-btn active" onclick="showSec('dashboard',this)">⚠️ Items Needing Attention</button>
       <button type="button" class="nav-btn" onclick="showSec('caseload',this)">👥 Caseload</button>
       <button type="button" class="nav-btn" onclick="showSec('caseloadTracker',this)">🗂️ Caseload Tracker</button>
       <button type="button" class="nav-btn" onclick="showSec('abTracker',this)">🔤 A/B Tracker</button>
@@ -517,26 +512,32 @@ tbody tr.mr-critical td{}
     <!-- DASHBOARD -->
     <div class="section active" id="sec-dashboard">
       <div class="sec-header">
-        <div><div class="sec-title">Dashboard</div><div class="sec-sub" id="dash-date"></div></div>
-      </div>
-      <div class="dash-grid" id="stat-cards" style="display:none"></div>
-      <div class="sec-header" style="margin-top:8px">
-        <div class="sec-title">⚠️ Items Needing Attention</div>
+        <div><div class="sec-title">⚠️ Items Needing Attention</div><div class="sec-sub" id="dash-date"></div></div>
         <div style="display:flex;gap:6px;margin-left:auto">
           <button type="button" class="btn btn-neutral btn-sm" onclick="collapseAll()">Collapse All</button>
           <button type="button" class="btn btn-neutral btn-sm" onclick="expandAll()">Expand All</button>
         </div>
       </div>
+      <div class="dash-grid" id="stat-cards" style="display:none"></div>
       <!-- Filter buttons -->
       <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px">
         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
           <div class="search-wrap"><input type="text" id="dash-search" placeholder="Search consumer or MCI#…" oninput="renderDashboard();onSearchInput('dash-search')" style="width:220px"><button type="button" class="search-clear" id="dash-search-clear" onclick="clearSearch('dash-search',renderDashboard)" title="Clear search">✕</button></div><span id="cf-badge-dashboard" style="display:none;align-items:center;gap:4px;background:var(--accent-light);border:1px solid var(--accent);border-radius:12px;padding:2px 8px;font-size:11px;color:var(--accent);font-weight:600;cursor:pointer;white-space:nowrap" onclick="clearAllColFilters('dashboard')" title="Clear all column filters">⊘ Filtered ✕</span>
-          <div class="dash-filter-bar" id="dash-filter-bar" style="margin-bottom:0">
-            <button type="button" class="dash-ftab active" onclick="setDashFilter('all',this)">All</button>
-            <button type="button" class="dash-ftab" onclick="setDashFilter('overdue',this)">🔴 Critical</button>
-            <button type="button" class="dash-ftab" onclick="setDashFilter('due_this_month',this)">Due This Month</button>
-            <button type="button" class="dash-ftab" onclick="setDashFilter('due_next_month',this)">Due Next Month</button>
-          </div>
+        </div>
+        <!-- Category filter: which area(s) to show -->
+        <div class="dash-filter-bar" id="dash-cat-bar" style="margin-bottom:0">
+          <button type="button" class="dash-ftab active" onclick="setDashCategory('all',this)">All</button>
+          <button type="button" class="dash-ftab" onclick="setDashCategory('mon',this)">Monitoring</button>
+          <button type="button" class="dash-ftab" onclick="setDashCategory('isp',this)">ISP</button>
+          <button type="button" class="dash-ftab" onclick="setDashCategory('puns',this)">PUNS</button>
+          <button type="button" class="dash-ftab" onclick="setDashCategory('emerg',this)">EP / FFA / Voter</button>
+        </div>
+        <!-- Severity/period filter -->
+        <div class="dash-filter-bar" id="dash-filter-bar" style="margin-bottom:0">
+          <button type="button" class="dash-ftab active" onclick="setDashFilter('all',this)">All</button>
+          <button type="button" class="dash-ftab" onclick="setDashFilter('overdue',this)">🔴 Critical</button>
+          <button type="button" class="dash-ftab" onclick="setDashFilter('due_this_month',this)">Due This Month</button>
+          <button type="button" class="dash-ftab" onclick="setDashFilter('due_next_month',this)">Due Next Month</button>
         </div>
       </div>
       <!-- Restore dismissed bar -->
@@ -643,7 +644,7 @@ tbody tr.mr-critical td{}
         <div id="pg-isp"></div>
         <div class="table-wrap isp-wrap">
           <table><thead><tr>
-            <th class="sortable" onclick="setSort('isp','client')">Consumer<span id="sort-isp-client"></span></th><th class="sortable" onclick="setSort('isp','mci')">MCI#<span id="sort-isp-mci"></span></th><th>Waiver <button class="cf-btn" id="cfb-isp-waiver" onclick="event.stopPropagation();openColFilter(event,'isp','waiver')" title="Filter">▾</button><span id="sort-isp-waiver"></span></th><th class="sortable" onclick="setSort('isp','annual')">Annual Review<span id="sort-isp-annual"></span></th><th class="sortable" onclick="setSort('isp','start')">Start −120d<span id="sort-isp-start"></span></th><th class="sortable" onclick="setSort('isp','lastIsp')">Last ISP −60d<span id="sort-isp-lastIsp"></span></th><th class="sortable" onclick="setSort('isp','scheduled')">ISP Scheduled<span id="sort-isp-scheduled"></span></th><th class="sortable" onclick="setSort('isp','inviteDue')">Invite Due<span id="sort-isp-inviteDue"></span></th><th class="sortable" onclick="setSort('isp','invite')">Invite Done<span id="sort-isp-invite"></span></th><th class="sortable" onclick="setSort('isp','submitBy')">Submit By −50d<span id="sort-isp-submitBy"></span></th><th class="sortable" onclick="setSort('isp','submitted')">Submitted<span id="sort-isp-submitted"></span></th><th class="sortable" onclick="setSort('isp','futureARUD')">Future ARUD<span id="sort-isp-futureARUD"></span></th><th>Status <button class="cf-btn" id="cfb-isp-status" onclick="event.stopPropagation();openColFilter(event,'isp','status')" title="Filter">▾</button><span id="sort-isp-status"></span></th><th class="sortable" onclick="setSort('isp','variance')">Variance<span id="sort-isp-variance"></span></th><th></th>
+            <th class="sortable" onclick="setSort('isp','client')">Consumer<span id="sort-isp-client"></span></th><th class="sortable" onclick="setSort('isp','mci')">MCI#<span id="sort-isp-mci"></span></th><th>Waiver <button class="cf-btn" id="cfb-isp-waiver" onclick="event.stopPropagation();openColFilter(event,'isp','waiver')" title="Filter">▾</button><span id="sort-isp-waiver"></span></th><th class="sortable" onclick="setSort('isp','annual')">Annual Review<span id="sort-isp-annual"></span></th><th class="sortable" onclick="setSort('isp','start')">Start −120d<span id="sort-isp-start"></span></th><th class="sortable" onclick="setSort('isp','lastIsp')">Last ISP −60d<span id="sort-isp-lastIsp"></span></th><th class="sortable" onclick="setSort('isp','scheduled')">ISP Scheduled<span id="sort-isp-scheduled"></span></th><th class="sortable" onclick="setSort('isp','inviteDue')">Invite Due<span id="sort-isp-inviteDue"></span></th><th class="sortable" onclick="setSort('isp','invite')">Invite Done<span id="sort-isp-invite"></span></th><th class="sortable" onclick="setSort('isp','submitBy')">Submit By −50d<span id="sort-isp-submitBy"></span></th><th class="sortable" onclick="setSort('isp','submitted')">Submitted<span id="sort-isp-submitted"></span></th><th>Status <button class="cf-btn" id="cfb-isp-status" onclick="event.stopPropagation();openColFilter(event,'isp','status')" title="Filter">▾</button><span id="sort-isp-status"></span></th><th class="sortable" onclick="setSort('isp','variance')">Variance<span id="sort-isp-variance"></span></th><th></th>
           </tr></thead><tbody id="isp-body"></tbody></table>
         </div>
       </div>
@@ -728,7 +729,7 @@ tbody tr.mr-critical td{}
           <a href="#instr-puns" style="display:block;padding:7px 10px;border-radius:var(--radius-xs);font-size:13px;color:var(--text2);text-decoration:none;transition:background .12s" onmouseover="this.style.background='var(--accent-light)';this.style.color='var(--accent)'" onmouseout="this.style.background='';this.style.color='var(--text2)'">PUNS</a>
           <a href="#instr-emergency" style="display:block;padding:7px 10px;border-radius:var(--radius-xs);font-size:13px;color:var(--text2);text-decoration:none;transition:background .12s" onmouseover="this.style.background='var(--accent-light)';this.style.color='var(--accent)'" onmouseout="this.style.background='';this.style.color='var(--text2)'">Emergency / FFA / Voter</a>
           <a href="#instr-ab" style="display:block;padding:7px 10px;border-radius:var(--radius-xs);font-size:13px;color:var(--text2);text-decoration:none;transition:background .12s" onmouseover="this.style.background='var(--accent-light)';this.style.color='var(--accent)'" onmouseout="this.style.background='';this.style.color='var(--text2)'">SCO P4P (A/B Tracker)</a>
-          <a href="#instr-dashboard" style="display:block;padding:7px 10px;border-radius:var(--radius-xs);font-size:13px;color:var(--text2);text-decoration:none;transition:background .12s" onmouseover="this.style.background='var(--accent-light)';this.style.color='var(--accent)'" onmouseout="this.style.background='';this.style.color='var(--text2)'">Dashboard & Alerts</a>
+          <a href="#instr-dashboard" style="display:block;padding:7px 10px;border-radius:var(--radius-xs);font-size:13px;color:var(--text2);text-decoration:none;transition:background .12s" onmouseover="this.style.background='var(--accent-light)';this.style.color='var(--accent)'" onmouseout="this.style.background='';this.style.color='var(--text2)'">Items Needing Attention</a>
           <a href="#instr-glossary" style="display:block;padding:7px 10px;border-radius:var(--radius-xs);font-size:13px;color:var(--text2);text-decoration:none;transition:background .12s" onmouseover="this.style.background='var(--accent-light)';this.style.color='var(--accent)'" onmouseout="this.style.background='';this.style.color='var(--text2)'">Glossary</a>
         </div>
 
@@ -743,7 +744,7 @@ tbody tr.mr-critical td{}
                 <li><strong>Step 2 — Data Folder:</strong> Choose where your records are automatically saved. Select your backup folder — ideally on OneDrive or a shared drive so your data is always protected. This step is required.</li>
                 <li><strong>Step 3 — Confirm:</strong> Review your name, coach, and folder — then click <strong>Get Started</strong>.</li>
               </ul>
-              <p>Once set up, you will land on the Dashboard. Go to <strong>Caseload → + Add Consumer</strong> to begin adding your consumers.</p>
+              <p>Once set up, you will land on <strong>Items Needing Attention</strong>. Go to <strong>Caseload → + Add Consumer</strong> to begin adding your consumers.</p>
               <div style="background:var(--accent-light);border:1px solid var(--accent);border-radius:var(--radius-sm);padding:10px 14px;font-size:12px;color:var(--accent)">
                 💡 <strong>Setting up on a new computer?</strong> Click <strong>Restore from Records</strong> on the setup screen instead of entering your info again. Pick your backup file and all your data will be restored automatically.
               </div>
@@ -863,11 +864,10 @@ tbody tr.mr-critical td{}
                 <li>Last ISP Date — 60 days before Annual Review</li>
                 <li>Submit By — 50 days before Annual Review</li>
                 <li>Invite Due — 30 days before scheduled ISP meeting</li>
-                <li>Future ARUD — exactly 1 year after Annual Review (leap year safe)</li>
               </ul>
-              <p><strong>Submitting an ISP:</strong> Once you enter a Submitted date, all deadline columns grey out with a strikethrough and a <strong>→ Next ARUD</strong> button appears on the row. When the ISP is approved and the new annual date is confirmed, click → Next ARUD to advance the timeline to the next cycle and clear the submitted date.</p>
+              <p><strong>Submitting an ISP:</strong> Once you enter a Submitted date, all deadline columns grey out with a strikethrough and a <strong>→ Next ARUD</strong> button appears on the row. When the ISP is approved and the new annual date is confirmed, click → Next ARUD and type in the new Annual Review Date — this advances the timeline to the next cycle and clears the submitted date. The date isn't calculated automatically since plans don't always renew exactly a year out.</p>
               <p><strong>ISP Status</strong> is set manually: In Progress → Pending Approval → Approved → Needs Revision. The app does not change status automatically.</p>
-              <p>Dates shown in <span style="color:var(--red)">red</span> are past due. Dates in <span style="color:#d97706">yellow/orange</span> are due within 14 days. Greyed strikethrough columns mean the ISP has been submitted.</p>
+              <p>Dates shown in <span style="color:var(--red)">red</span> are past due. Dates in <span style="color:#d97706">yellow/orange</span> are due within 14 days. Once a step is marked done (e.g. Invite Done), its due-date column stops showing red/yellow even if that date has passed — the coloring reflects what's still outstanding, not what's already finished. Greyed strikethrough columns mean the ISP has been submitted.</p>
             </div>
           </div>
 
@@ -881,7 +881,7 @@ tbody tr.mr-critical td{}
                 <li>Coach reviews and finalizes in HCSIS → SC enters the <strong>Finalized Date</strong></li>
                 <li>Entering a new Finalized Date automatically clears the Submitted to Coach date</li>
               </ul>
-              <p><strong>PUNS Due Date</strong> is calculated automatically — 334 days after the Finalized Date.</p>
+              <p><strong>PUNS Due Date</strong> is calculated automatically — 334 days after the Finalized Date. Once a Submitted to Coach date is entered, the Due Date column instead shows <strong>Update Finalized Date</strong> — the record is waiting on the state, not on you, so it's also excluded from Items Needing Attention until the Finalized Date is updated.</p>
               <p><strong>Categories:</strong> Planning, Critical, Emergency, Child, All Needs Met. Child and All Needs Met categories are automatically set to Inactive with no due date calculated.</p>
             </div>
           </div>
@@ -913,11 +913,17 @@ tbody tr.mr-critical td{}
           </div>
 
           <div id="instr-dashboard" class="card">
-            <div class="card-header"><div class="card-title">Dashboard &amp; Alerts</div></div>
+            <div class="card-header"><div class="card-title">Items Needing Attention</div></div>
             <div class="card-body" style="font-size:13px;line-height:1.7;color:var(--text2);display:flex;flex-direction:column;gap:10px">
-              <p>The <strong>Dashboard</strong> shows everything needing attention, grouped by category: Monitoring, PUNS, ISP, and Emergency.</p>
+              <p><strong>Items Needing Attention</strong> shows everything due or in progress, grouped by category: Monitoring, PUNS, ISP, and Emergency / FFA / Voter.</p>
+              <p><strong>Two filter rows work together:</strong></p>
+              <ul style="margin-left:16px;display:flex;flex-direction:column;gap:4px">
+                <li><strong>Category filter</strong> — All / Monitoring / ISP / PUNS / EP-FFA-Voter. Narrows which category group(s) are shown.</li>
+                <li><strong>Status filter</strong> — All / 🔴 Critical / Due This Month / Due Next Month. Narrows by urgency within whatever category is selected.</li>
+              </ul>
+              <p><strong>Monitoring Partial</strong> — a monitoring entry that's been started but isn't complete (missing Contact Type, Contact Date, or Tool Done Date) shows as <em>Monitoring Partial</em> and is grouped under <strong>🔴 Critical</strong> alongside truly overdue items, since it also needs the SC to finish it.</p>
+              <p><strong>PUNS</strong> — once a PUNS record has a Submitted to Coach date, it drops out of Items Needing Attention entirely. It's waiting on the state to finalize, not on the SC, so it isn't shown as a due item until the Finalized Date is updated.</p>
               <p>Click <strong>Log</strong> on any alert row to open the logging modal directly. Once the requirement is met, the alert disappears automatically.</p>
-              
               <p>Click <strong>✕</strong> to temporarily dismiss an alert. Use <strong>Restore All</strong> to bring dismissed alerts back.</p>
               <p>Use the <strong>search box</strong> at the top to narrow down alerts by consumer name or MCI#. A <strong>▾</strong> arrow on the Waiver column lets you filter alerts by waiver type. When a filter is active a <strong>⊘ Filtered ✕</strong> badge appears — click it to clear.</p>
               <p>Alert labels show the specific type — <em>Emergency Preparedness Critical</em>, <em>FFA (Free from Abuse) Due Soon</em>, <em>Monitoring Due (every 2mo)</em> — so you always know exactly what is needed.</p>
@@ -969,6 +975,28 @@ tbody tr.mr-critical td{}
     </div>
   </div>
 </div>
+
+<!-- ADVANCE ARUD MODAL (manual next-cycle date entry) -->
+<div class="modal-overlay" id="advanceARUDModal" style="z-index:900">
+  <div class="modal" style="max-width:440px">
+    <div class="modal-header">
+      <div class="modal-title">Advance to Next ARUD</div>
+      <button type="button" class="modal-close" onclick="closeModal('advanceARUDModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <p id="advanceARUDModal-msg" style="font-size:13px;line-height:1.6;color:var(--text2);margin-bottom:14px"></p>
+      <div class="form-group">
+        <label>New Annual Review Date</label>
+        <input type="date" min="1900-01-01" max="2500-12-31" id="advance-arud-date">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button type="button" class="btn btn-neutral" onclick="closeModal('advanceARUDModal')">Cancel</button>
+      <button type="button" class="btn" onclick="confirmAdvanceISP()">Advance</button>
+    </div>
+  </div>
+</div>
+
 
 <!-- EXPORT CLIENTS MODAL -->
 <div class="modal-overlay" id="exportClientsModal" style="z-index:500">
@@ -1337,7 +1365,7 @@ tbody tr.mr-critical td{}
     </div>
     <div class="modal-footer">
       <button type="button" class="btn btn-neutral" onclick="closeModal('ispModal')">Cancel</button>
-      <button type="button" class="btn btn-danger" onclick="clearISPEntry()">Clear</button>
+      
       <button type="button" class="btn" onclick="saveISP()">Save</button>
     </div>
   </div>
@@ -1358,7 +1386,7 @@ tbody tr.mr-critical td{}
     </div>
     <div class="modal-footer">
       <button type="button" class="btn btn-neutral" onclick="closeModal('punsModal')">Cancel</button>
-      <button type="button" class="btn btn-danger" onclick="clearPUNSEntry()">Clear</button>
+      
       <button type="button" class="btn" onclick="savePUNS()">Save</button>
     </div>
   </div>
@@ -1366,13 +1394,58 @@ tbody tr.mr-critical td{}
 
 <!-- EMERGENCY MODAL -->
 <div class="modal-overlay" id="emergModal">
-  <div class="modal">
+  <div class="modal" style="max-width:620px">
     <div class="modal-header"><div class="modal-title" id="emergModalTitle">Edit Emergency / FFA / Voter</div><button type="button" class="modal-close" onclick="closeModal('emergModal')">✕</button></div>
-    <div class="modal-body">
+    <div class="modal-body" style="max-height:70vh;overflow-y:auto">
+
+      <!-- Emergency (EP) -->
+      <div id="emerg-section-emerg">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+          <strong style="font-size:13px">Emergency (EP)</strong>
+        </div>
+        <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:10px 12px;margin-bottom:10px;font-size:12px" id="em-status-emerg"></div>
+        <div class="form-grid" style="grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+          <div class="form-group"><label>Completed Date</label><input type="date" id="em-new-emerg" min="1900-01-01" max="2500-12-31" oninput="updateEmergNextDue('emerg')"></div>
+          <div class="form-group"><label>Next Due <span style="font-size:10px;color:var(--text3)">(auto)</span></label><input type="text" id="em-nextdue-emerg" readonly style="background:var(--surface2);color:var(--text3)"></div>
+        </div>
+        <button type="button" class="btn btn-sm btn-neutral" onclick="addEmergEntry('emerg')" style="margin-bottom:4px">+ Log Completed</button>
+      </div>
+
+      <hr style="border:none;border-top:1px solid var(--border);margin:10px 0 14px">
+
+      <!-- FFA -->
+      <div id="emerg-section-ffa">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+          <strong style="font-size:13px">Free From Abuse (FFA)</strong>
+        </div>
+        <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:10px 12px;margin-bottom:10px;font-size:12px" id="em-status-ffa"></div>
+        <div class="form-grid" style="grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+          <div class="form-group"><label>Completed Date</label><input type="date" id="em-new-ffa" min="1900-01-01" max="2500-12-31" oninput="updateEmergNextDue('ffa')"></div>
+          <div class="form-group"><label>Next Due <span style="font-size:10px;color:var(--text3)">(auto)</span></label><input type="text" id="em-nextdue-ffa" readonly style="background:var(--surface2);color:var(--text3)"></div>
+        </div>
+        <button type="button" class="btn btn-sm btn-neutral" onclick="addEmergEntry('ffa')" style="margin-bottom:4px">+ Log Completed</button>
+      </div>
+
+      <hr style="border:none;border-top:1px solid var(--border);margin:10px 0 14px">
+
+      <!-- Voter -->
+      <div id="emerg-section-voter">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+          <strong style="font-size:13px" id="em-voter-label">Voter Registration</strong>
+        </div>
+        <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:10px 12px;margin-bottom:10px;font-size:12px" id="em-status-voter"></div>
+        <div class="form-grid" style="grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+          <div class="form-group"><label>Completed Date</label><input type="date" id="em-new-voter" min="1900-01-01" max="2500-12-31" oninput="updateEmergNextDue('voter')"></div>
+          <div class="form-group"><label>Next Due <span style="font-size:10px;color:var(--text3)">(auto)</span></label><input type="text" id="em-nextdue-voter" readonly style="background:var(--surface2);color:var(--text3)"></div>
+        </div>
+        <button type="button" id="em-voter-add-btn" class="btn btn-sm btn-neutral" onclick="addEmergEntry('voter')" style="margin-bottom:4px">+ Log Completed</button>
+      </div>
+
+      <hr style="border:none;border-top:1px solid var(--border);margin:4px 0 14px">
+
+      <!-- Other -->
+      <strong style="font-size:13px;display:block;margin-bottom:8px">Other</strong>
       <div class="form-grid">
-        <div class="form-group"><label>Emergency Done</label><input type="date" min="1900-01-01" max="2500-12-31" id="em-emerg"></div>
-        <div class="form-group"><label>FFA Done</label><input type="date" min="1900-01-01" max="2500-12-31" id="em-ffa"></div>
-        <div class="form-group"><label>Voter Done</label><input type="date" min="1900-01-01" max="2500-12-31" id="em-voter"></div>
         <div class="form-group"><label>LifeCourse Done</label><input type="date" min="1900-01-01" max="2500-12-31" id="em-lc"></div>
         <div class="form-group"><label>Resources Shared</label><input type="date" min="1900-01-01" max="2500-12-31" id="em-res"></div>
         <div class="form-group"><label>Recert Date</label><input type="date" min="1900-01-01" max="2500-12-31" id="em-recert"></div>
@@ -1380,7 +1453,7 @@ tbody tr.mr-critical td{}
     </div>
     <div class="modal-footer">
       <button type="button" class="btn btn-neutral" onclick="closeModal('emergModal')">Cancel</button>
-      <button type="button" class="btn btn-danger" onclick="clearEmergencyEntry()">Clear</button>
+      
       <button type="button" class="btn" onclick="saveEmerg()">Save</button>
     </div>
   </div>
@@ -1435,43 +1508,8 @@ tbody tr.mr-critical td{}
 // VERSION MANAGEMENT
 // ================================================================
 let APP_VERSION = '1.2.3'; // overwritten at runtime by main process via getAppVersion
-// VERSION_CHECK_URL: set this to the URL of your version.json on SharePoint once hosted.
-// version.json should contain: {"version":"1.0.0","releaseNotes":"What changed"}
-// Leave blank to disable version checking (local file mode).
-const VERSION_CHECK_URL = '';
-
-async function checkForUpdates() {
-  if (!VERSION_CHECK_URL) return; // disabled in local mode
-  try {
-    const res = await fetch(VERSION_CHECK_URL + '?t=' + Date.now());
-    if (!res.ok) return;
-    const data = await res.json();
-    if (data.version && data.version !== APP_VERSION) {
-      showVersionBanner(data.version, data.releaseNotes || '', data.updateUrl || '');
-    }
-  } catch(e) {
-    // Silently fail — offline or URL not set
-  }
-}
-
-function showVersionBanner(newVersion, notes, updateUrl) {
-  let banner = document.getElementById('version-banner');
-  if (!banner) {
-    banner = document.createElement('div');
-    banner.id = 'version-banner';
-    banner.innerHTML = `
-      <div class="vb-msg">
-        🆕 <strong>Version ${newVersion} is available</strong>
-        ${notes ? `<span style="opacity:.8;margin-left:8px;font-weight:400">${notes}</span>` : ''}
-      </div>
-      <div class="vb-actions">
-        ${updateUrl ? `<button type="button" onclick="window.location.href='${updateUrl}'" style="background:#fff;color:#1e40af;padding:5px 14px;border-radius:6px;font-weight:700;font-size:12px;border:none;cursor:pointer;">Update Now</button>` : ''}
-        <button type="button" onclick="document.getElementById('version-banner').classList.remove('show')" style="background:rgba(255,255,255,.2);border:none;color:#fff;padding:5px 10px;border-radius:6px;cursor:pointer;font-size:12px;">Dismiss</button>
-      </div>`;
-    document.body.appendChild(banner);
-  }
-  setTimeout(() => banner.classList.add('show'), 500);
-}
+// Update checking is handled by electron-updater against GitHub Releases (see main.js
+// and the "Auto-update event listeners" block below) — that's the live mechanism.
 
 // Add version to topbar
 async function openAppDetails() {
@@ -2366,8 +2404,7 @@ function ispCalc(isp) {
     start:    addDays(ar,-120),
     lastISP:  addDays(ar,-60),
     inviteDue:isp?.scheduled?addDays(pd(isp.scheduled),-30):null,
-    submitBy: addDays(ar,-50),
-    futureARUD:addYrs(ar,1)
+    submitBy: addDays(ar,-50)
   };
 }
 
@@ -2426,7 +2463,35 @@ function renderDashboard() {
   const alertFilter = window._dashFilter || 'all';
 
   S.clients.filter(c => c.status === 'Active').forEach(c => {
+   try {
     total++;
+
+    // Monitoring — Partial: any logged month with an entry that's started but not
+    // complete (some but not all of Contact Type / Contact Date / Tool Done Date).
+    // Checked independently across every month, not just the cadence-computed
+    // "next due" month — a partial entry with a Contact Date already counts toward
+    // getNextDue()'s cadence math, so it can sit in an earlier month than that.
+    // Classified as 'overdue' severity so it groups under Critical, per Nick's call.
+    const monData = S.monitoring[c.mci] || {};
+    Object.keys(monData).forEach(mk => {
+      const entry = monData[mk];
+      if (!entry || (!entry.dt && !entry.con && !entry.dn)) return;
+      const [mYr, mMo] = mk.split('_').map(Number);
+      const mStatus = clientMonStatus(c.mci, mYr, mMo);
+      if (mStatus !== 'pending_tool' && mStatus !== 'pending_date' && mStatus !== 'pending_type') return;
+      const missing = mStatus === 'pending_tool' ? 'Missing Tool Done Date'
+                     : mStatus === 'pending_date' ? 'Missing Contact Date'
+                     : 'Missing Contact Type';
+      alerts.push({
+        c,
+        issue: 'Monitoring Partial',
+        cat: 'Monitoring',
+        detail: `${MONTHS[mMo]||''} ${mYr||''} — ${missing}`.trim(),
+        s: 'overdue',
+        bucket: 'overdue'
+      });
+    });
+
     // Monitoring
     const nextMon = getNextDue(c.mci);
     if (nextMon) {
@@ -2468,8 +2533,13 @@ function renderDashboard() {
     }
 
     // PUNS
+    // Once "Submitted to Coach" is set, the due date is no longer a live deadline for
+    // the SC — the next action is updating the Finalized Date once the state responds,
+    // not chasing an "overdue" due date. So it's excluded here entirely. The underlying
+    // due-date math (punsDue) is untouched — the Coach app still needs it — this only
+    // controls what surfaces in Items Needing Attention.
     const puns = S.puns[c.mci];
-    const punsDate = punsDue(puns);
+    const punsDate = puns?.submitted ? null : punsDue(puns);
     if (punsDate) {
       const days = diffDays(punsDate, t);
       const bucket = generalDueBucket(punsDate);
@@ -2599,12 +2669,20 @@ function renderDashboard() {
     else if (abStatus === 'Missed') abMiss++;
     // Not Started is neutral — no count
     else if (abStatus === 'Not Applicable') abNA++;
+   } catch(e) {
+    console.error('Items Needing Attention: skipped a record due to an error', c?.mci, e);
+   }
   });
 
   if (alertFilter !== 'all') {
     alerts = alertFilter === 'overdue'
       ? alerts.filter(a => a.s === 'overdue')
       : alerts.filter(a => a.bucket === alertFilter);
+  }
+  const dashCategory = window._dashCategory || 'all';
+  if (dashCategory !== 'all') {
+    const CAT_MAP = { mon:'Monitoring', isp:'ISP', puns:'PUNS', emerg:'Emergency' };
+    alerts = alerts.filter(a => a.cat === CAT_MAP[dashCategory]);
   }
   const dashWaiver = colFilters.dashboard.waiver;
   const dashQ = (document.getElementById('dash-search')?.value || '').toLowerCase();
@@ -2620,7 +2698,7 @@ function renderDashboard() {
   if (cfAutoClearIfEmpty('dashboard', alerts, S.clients.filter(c=>c.status==='Active').length)) return;
   const container = document.getElementById('alerts-groups');
   if (!alerts.length) {
-    const _dashHasF = dashWaiver || dashStatus || dashQ;
+    const _dashHasF = dashWaiver || dashStatus || dashQ || dashCategory !== 'all';
     container.innerHTML = _dashHasF
       ? '<div style="text-align:center;padding:40px 24px;color:var(--text3);background:var(--surface);border-radius:var(--radius);border:1px solid var(--border)">🔍 <strong>No Results Found</strong><p style="font-size:12px;margin-top:4px">Try adjusting your search or filters.</p></div>'
       : '<div style="text-align:center;padding:40px 24px;color:var(--text3);background:var(--surface);border-radius:var(--radius);border:1px solid var(--border)">✅ No items need attention right now</div>';
@@ -2700,6 +2778,10 @@ function renderDashboard() {
 
   updateRestoreBar();
 
+  }catch(e){
+    console.error('Items Needing Attention failed to render', e);
+    const c = document.getElementById('alerts-groups');
+    if (c) c.innerHTML = `<div style="text-align:center;padding:40px 24px;color:var(--red);background:var(--surface);border-radius:var(--radius);border:1px solid var(--border)">⚠️ <strong>This page hit an error and couldn't load.</strong><p style="font-size:12px;margin-top:4px;color:var(--text3)">Try switching tabs and back. If it keeps happening, let Nick know: ${escapeHtml(e?.message||String(e))}</p></div>`;
   }finally{_rendering.dashboard=false;}
 }
 
@@ -2759,6 +2841,10 @@ function renderCaseload() {
     </tr>`).join('');
   renderPagination('caseload', clients.length, 'pg-caseload');
 
+  }catch(e){
+    console.error('Caseload failed to render', e);
+    const tb = document.getElementById('caseload-body');
+    if (tb) tb.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:32px;color:var(--red)">⚠️ This tab hit an error and couldn\'t load. Try switching tabs and back.</td></tr>';
   }finally{_rendering.caseload=false;}
 }
 
@@ -2766,6 +2852,7 @@ function renderCaseload() {
 // MONITORING
 // ================================================================
 function renderMonitoring() {
+ try {
   document.getElementById('monYearLabel').textContent = monYear;
   // When navigating months, reset chip to 'all' unless it's a chip that makes sense across months
   // (done, upcoming, na are month-independent; need-attention chips are month-specific)
@@ -2854,6 +2941,11 @@ function renderMonitoring() {
   `;
 
   renderMonTable();
+ } catch(e) {
+  console.error('Monitoring failed to render', e);
+  const tb = document.getElementById('mon-body');
+  if (tb) tb.innerHTML = '<tr><td colspan="9" style="text-align:center;padding:32px;color:var(--red)">⚠️ This tab hit an error and couldn\'t load. Try switching tabs and back.</td></tr>';
+ }
 }
 
 function renderMonTable() {
@@ -2945,15 +3037,28 @@ function renderMonTable() {
     </tr>`;
   }).join('');
   renderPagination('monitoring', rows.length, 'pg-monitoring');
+  }catch(e){
+    console.error('Monitoring table failed to render', e);
+    const tb = document.getElementById('mon-body');
+    if (tb) tb.innerHTML = '<tr><td colspan="9" style="text-align:center;padding:32px;color:var(--red)">⚠️ This tab hit an error and couldn\'t load. Try switching tabs and back.</td></tr>';
   }finally{_rendering.monitoring=false;}
 }
 
 function setDashFilter(f, btn) {
   window._dashFilter = f;
-  document.querySelectorAll('.dash-ftab').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('#dash-filter-bar .dash-ftab').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
   // Auto-expand all groups when a filter is selected
   if (f !== 'all') expandAll();
+  renderDashboard();
+}
+
+function setDashCategory(cat, btn) {
+  window._dashCategory = cat;
+  document.querySelectorAll('#dash-cat-bar .dash-ftab').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  // Auto-expand all groups when narrowing to a specific category
+  if (cat !== 'all') expandAll();
   renderDashboard();
 }
 
@@ -3054,16 +3159,15 @@ function renderISP(){
       invite:    isp.invite||'',
       submitBy:  calc.submitBy?calc.submitBy.toISOString():'',
       submitted: isp.submitted||'',
-      futureARUD:calc.futureARUD?calc.futureARUD.toISOString():'',
       status:    x.statusText,
       variance:  isp.variance||''
     };
   });
-  updateSortIndicators('isp', ['client','mci','waiver','annual','start','lastIsp','scheduled','inviteDue','invite','submitBy','submitted','futureARUD','status','variance']);
+  updateSortIndicators('isp', ['client','mci','waiver','annual','start','lastIsp','scheduled','inviteDue','invite','submitBy','submitted','status','variance']);
   const _ispBase = S.clients.filter(c=>c.status==='Active');
   if (cfAutoClearIfEmpty('isp', clients, _ispBase.length)) return;
   const ispTotal=_ispBase.length; const ispCountEl=document.getElementById('isp-count'); if(ispCountEl) ispCountEl.textContent='';
-  if(!clients.length){tbody.innerHTML=_ispBase.length===0?'<tr><td colspan="15" style="text-align:center;padding:32px;color:var(--text3)"><strong>No active consumers</strong><div style="font-size:11px;margin-top:4px;opacity:.7">Add consumers or check the Inactive view</div></td></tr>':'<tr><td colspan="15" style="text-align:center;padding:32px;color:var(--text3)"><strong>No consumers found</strong><div style="font-size:11px;margin-top:4px;opacity:.7">Try adjusting your search or filters</div></td></tr>';document.getElementById('pg-isp').innerHTML='';return;}
+  if(!clients.length){tbody.innerHTML=_ispBase.length===0?'<tr><td colspan="14" style="text-align:center;padding:32px;color:var(--text3)"><strong>No active consumers</strong><div style="font-size:11px;margin-top:4px;opacity:.7">Add consumers or check the Inactive view</div></td></tr>':'<tr><td colspan="14" style="text-align:center;padding:32px;color:var(--text3)"><strong>No consumers found</strong><div style="font-size:11px;margin-top:4px;opacity:.7">Try adjusting your search or filters</div></td></tr>';document.getElementById('pg-isp').innerHTML='';return;}
   function dc(d, done, greyed, noColor=false){
     if(!d) return `<td style="color:var(--text3)">—</td>`;
     if(greyed) return `<td class="date-cell" style="color:var(--text3);text-decoration:line-through" title="ISP submitted">${fd(d)}</td>`;
@@ -3082,17 +3186,16 @@ function renderISP(){
       <td class="date-cell">${isp.annual?fd(isp.annual):'—'}</td>
       ${dc(calc.start,false,submitted,true)}${dc(calc.lastISP,false,submitted,true)}
       <td class="date-cell" style="${submitted?'color:var(--text3)':''}">${isp.scheduled?fd(isp.scheduled):'—'}</td>
-      ${dc(calc.inviteDue,false,submitted)}
+      ${dc(calc.inviteDue,!!isp.invite,submitted)}
       <td class="date-cell" style="${submitted?'color:var(--text3)':''}">${isp.invite?`<span style="color:${submitted?'var(--text3)':'var(--green)'}">✓ ${fd(isp.invite)}</span>`:'—'}</td>
       ${dc(calc.submitBy,false,submitted)}
       <td class="date-cell">${isp.submitted?`<span style="color:var(--green)">✓ ${fd(isp.submitted)}</span>`:'—'}</td>
-      <td class="date-cell" style="font-weight:600;color:var(--accent)">${calc.futureARUD?fd(calc.futureARUD):'—'}</td>
       <td>${isp.status?`<span class="pill pill-blue">${isp.status}</span>`:'—'}</td>
       <td>${isp.variance?`<span class="pill pill-orange">${isp.variance}</span>`:'—'}</td>
       <td>
         <div class="actions-cell">
           <button type="button" class="btn btn-ghost btn-sm" onclick="openISPModal('${c.mci}')">Edit</button>
-          ${isp.submitted && calc.futureARUD ? `<button type="button" class="btn btn-neutral btn-sm" onclick="advanceISP('${c.mci}')" title="Advance to next ARUD: ${fd(calc.futureARUD)}">→ Next ARUD</button>` : ''}
+          ${isp.submitted ? `<button type="button" class="btn btn-neutral btn-sm" onclick="advanceISP('${c.mci}')" title="Advance to next ARUD cycle">→ Next ARUD</button>` : ''}
           ${isp.comments ? `<button type="button" class="btn btn-neutral btn-sm" onclick="viewISPComments('${c.mci}')" title="${isp.comments.replace(/"/g,'&quot;')}">💬 Comments</button>` : ''}
         </div>
       </td>
@@ -3100,6 +3203,10 @@ function renderISP(){
   }).join('');
   renderPagination('isp', clients.length, 'pg-isp');
 
+  }catch(e){
+    console.error('ISP failed to render', e);
+    const tb = document.getElementById('isp-body');
+    if (tb) tb.innerHTML = '<tr><td colspan="14" style="text-align:center;padding:32px;color:var(--red)">⚠️ This tab hit an error and couldn\'t load. Try switching tabs and back.</td></tr>';
   }finally{_rendering.isp=false;}
 }
 
@@ -3160,7 +3267,7 @@ function renderPUNS(){
       <td>${age(c.dob)}</td>
       <td>${puns.category?`<span class="pill pill-blue">${puns.category}</span>`:'—'}</td>
       <td class="date-cell">${puns.finalized?fd(puns.finalized):'—'}</td>
-      <td>${pd2?statusPill(pd2.toISOString().split('T')[0]):'<span class="pill pill-gray">—</span>'}</td>
+      <td>${puns.submitted ? '<span class="pill pill-blue" title="Submitted to Coach — update the Finalized Date once the state responds">Update Finalized Date</span>' : (pd2?statusPill(pd2.toISOString().split('T')[0]):'<span class="pill pill-gray">—</span>')}</td>
       <td class="date-cell">${puns.submitted?fd(puns.submitted):'—'}</td>
       <td><span class="pill ${status==='Active'?'pill-green':'pill-gray'}">${status||'—'}</span></td>
       <td><button type="button" class="btn btn-ghost btn-sm" onclick="openPUNSModal('${c.mci}')">Edit</button></td>
@@ -3168,6 +3275,10 @@ function renderPUNS(){
   }).join('');
   renderPagination('puns', clients.length, 'pg-puns');
 
+  }catch(e){
+    console.error('PUNS failed to render', e);
+    const tb = document.getElementById('puns-body');
+    if (tb) tb.innerHTML = '<tr><td colspan="11" style="text-align:center;padding:32px;color:var(--red)">⚠️ This tab hit an error and couldn\'t load. Try switching tabs and back.</td></tr>';
   }finally{_rendering.puns=false;}
 }
 
@@ -3192,9 +3303,9 @@ function renderEmerg(){
     const due = f => f ? addYrs(pd(f),1).toISOString() : '';
     return {
       client:x.client, mci:x.mci, waiver:x.waiver||'',
-      emergDone:e.emerg||'', emergDue:due(e.emerg),
-      ffaDone:e.ffa||'',     ffaDue:due(e.ffa),
-      voterDone:e.voter||'', voterDue:due(e.voter),
+      emergDone:getEmergDate(x.mci,'emerg')||'', emergDue:due(getEmergDate(x.mci,'emerg')),
+      ffaDone:getEmergDate(x.mci,'ffa')||'',     ffaDue:due(getEmergDate(x.mci,'ffa')),
+      voterDone:getEmergDate(x.mci,'voter')||'', voterDue:due(getEmergDate(x.mci,'voter')),
       lc:e.lc||'', res:e.res||'', recert:e.recert||''
     };
   });
@@ -3212,9 +3323,9 @@ function renderEmerg(){
       <td><strong>${escapeHtml(c.last)}, ${escapeHtml(c.first)}</strong></td>
       <td class="date-cell">${padMCI(c.mci)}</td>
       <td><span class="pill pill-blue" style="font-size:10px">${c.waiver||'—'}</span></td>
-      <td class="date-cell">${e.emerg?fd(e.emerg):'—'}</td><td>${duePill(e.emerg)}</td>
-      <td class="date-cell">${e.ffa?fd(e.ffa):'—'}</td><td>${duePill(e.ffa)}</td>
-      <td class="date-cell">${(c.dob&&age(c.dob)<18)?'':e.voter?fd(e.voter):'—'}</td><td>${(c.dob&&age(c.dob)<18)?'':duePill(e.voter)}</td>
+      <td class="date-cell">${getEmergDate(c.mci,'emerg')?fd(pd(getEmergDate(c.mci,'emerg'))):'—'}</td><td>${duePill(getEmergDate(c.mci,'emerg'))}</td>
+      <td class="date-cell">${getEmergDate(c.mci,'ffa')?fd(pd(getEmergDate(c.mci,'ffa'))):'—'}</td><td>${duePill(getEmergDate(c.mci,'ffa'))}</td>
+      <td class="date-cell">${(c.dob&&age(c.dob)<18)?'':getEmergDate(c.mci,'voter')?fd(pd(getEmergDate(c.mci,'voter'))):'—'}</td><td>${(c.dob&&age(c.dob)<18)?'':duePill(getEmergDate(c.mci,'voter'))}</td>
       <td class="date-cell">${e.lc?`<span style="color:var(--green)">✓ ${fd(e.lc)}</span>`:'—'}</td>
       <td class="date-cell">${e.res?`<span style="color:var(--green)">✓ ${fd(e.res)}</span>`:'—'}</td>
       <td class="date-cell">${e.recert?fd(e.recert):'—'}</td>
@@ -3223,6 +3334,10 @@ function renderEmerg(){
   }).join('');
   renderPagination('emerg', clients.length, 'pg-emerg');
 
+  }catch(e){
+    console.error('Emergency/FFA/Voter failed to render', e);
+    const tb = document.getElementById('emerg-body');
+    if (tb) tb.innerHTML = '<tr><td colspan="13" style="text-align:center;padding:32px;color:var(--red)">⚠️ This tab hit an error and couldn\'t load. Try switching tabs and back.</td></tr>';
   }finally{_rendering.emerg=false;}
 }
 
@@ -3506,6 +3621,28 @@ async function doExportSelected() {
 
   setCaseSelectMode(false);
   toast(`✅ ${mcis.length} consumer(s) exported as ${filename}`);
+
+  // Same-moment safeguard: the #1 way transfers go wrong is forgetting this step
+  // afterward, so offer it right here while it's still top of mind — not as a
+  // separate manual task the SC has to remember later. Skippable if this export
+  // isn't actually a transfer (e.g. just sharing a backup copy).
+  const names = S.clients.filter(c => mcis.includes(c.mci)).map(c => `${c.last}, ${c.first}`);
+  const listPreview = names.length <= 6 ? names.join('\n') : names.slice(0,6).join('\n') + `\n…and ${names.length-6} more`;
+  if (await showConfirm(
+    `If this export was a transfer to another SC, mark these ${mcis.length} consumer(s) Inactive on your caseload now?\n\n${listPreview}\n\nSkip this if you were just sharing a copy, not transferring them out.`,
+    'Mark as Transferred?', 'Yes, Mark Inactive', 'btn btn-primary'
+  )) {
+    mcis.forEach(mci => {
+      const c = S.clients.find(x => x.mci === mci);
+      if (!c || c.status === 'Inactive') return;
+      c.status = 'Inactive';
+      if (!c.inactiveSince) c.inactiveSince = new Date().toISOString().slice(0,10);
+      auditEntry(mci, 'Client', 'Moved to Inactive (transfer export)', `${c.last}, ${c.first}`);
+    });
+    save();
+    render();
+    toast(`${mcis.length} consumer(s) moved to Inactive`);
+  }
 }
 
 
@@ -3660,16 +3797,7 @@ function openISPModal(mci){
   openModal('ispModal');
 }
 
-async function clearISPEntry() {
-  if (!_ispMCI) return;
-  if (!await showConfirm('Clear this ISP entry?','Clear ISP','Clear','btn btn-danger')) return;
 
-  S.isp[_ispMCI] = {};
-  save();
-  closeModal('ispModal');
-  render();
-  toast('ISP entry cleared');
-}
 
 function saveISP(){
   const ispDateErr2 = validateAllDatesIn('ispModal'); if (ispDateErr2) { toast(ispDateErr2, true); return; }
@@ -3687,8 +3815,13 @@ function saveISP(){
     invite:    document.getElementById('isp-invite').value,
     submitted: newSubmitted,
     status:    newStatus,
-    comments:  document.getElementById('isp-comments').value
+    comments:  document.getElementById('isp-comments').value,
+    ispLog:    prevISP.ispLog || []
   };
+
+  // Always sync the log entry for this ARUD cycle on every save
+  // appendISPLog upserts — same ARUD updates in place, new ARUD appends
+  appendISPLog(_ispMCI);
 
   const _is = auditSummary(prevISP, S.isp[_ispMCI], ['annual','variance','releases','scheduled','invite','submitted','status']);
   if (_is) auditEntry(_ispMCI, 'ISP', Object.keys(prevISP).length ? 'Updated' : 'Logged', _is);
@@ -3710,16 +3843,7 @@ function openPUNSModal(mci){
   openModal('punsModal');
 }
 
-async function clearPUNSEntry() {
-  if (!_punsMCI) return;
-  if (!await showConfirm('Clear this PUNS entry?','Clear PUNS','Clear','btn btn-danger')) return;
 
-  S.puns[_punsMCI] = {};
-  save();
-  closeModal('punsModal');
-  render();
-  toast('PUNS entry cleared');
-}
 
 function savePUNS(){
   const punsErr = validateAllDatesIn('punsModal'); if (punsErr) { toast(punsErr, true); return; }
@@ -3732,9 +3856,12 @@ function savePUNS(){
   const finalizedChanged = newFinalized && newFinalized !== prevFinalized;
   const submitted = finalizedChanged ? '' : newSubmitted;
 
-  S.puns[_punsMCI]={category:document.getElementById('puns-cat').value, finalized:newFinalized, submitted};
+  const prevPUNSLog = prevPUNS.punsLog || [];
+  S.puns[_punsMCI]={category:document.getElementById('puns-cat').value, finalized:newFinalized, submitted, punsLog:prevPUNSLog};
+  // Always sync the log entry for this finalized cycle on every save
+  // appendPUNSLog upserts — same finalized date updates in place, new date appends
+  appendPUNSLog(_punsMCI);
   if (finalizedChanged && newSubmitted) {
-    // Clear the field visually so SC sees it was cleared
     document.getElementById('puns-sub').value = '';
   }
   const _ps=auditSummary(prevPUNS,S.puns[_punsMCI],['category','finalized','submitted']); if(_ps) auditEntry(_punsMCI,'PUNS',Object.keys(prevPUNS).length?'Updated':'Logged',_ps);
@@ -3742,21 +3869,169 @@ function savePUNS(){
   toast(finalizedChanged && newSubmitted ? 'PUNS saved — Submitted to Coach date cleared' : 'PUNS saved');
 }
 
+// ── ISP Log System ───────────────────────────────────────────────────────────
+// Each time an ISP is submitted or the ARUD is advanced, a snapshot is appended
+// to ispLog[]. The SC sees only the current ARUD/submitted date. The coach app
+// reads the full log so entries persist even after ARUD rolls.
+
+function appendISPLog(mci) {
+  // One log entry per ARUD cycle (keyed by annual date).
+  // If an entry for this ARUD already exists, update it in place.
+  // A new entry is only created when the ARUD itself changes (advanceISP).
+  const isp = S.isp[mci] || {};
+  if (!isp.annual) return;
+  if (!S.isp[mci].ispLog) S.isp[mci].ispLog = [];
+  const log = S.isp[mci].ispLog;
+  const existingIdx = log.findIndex(e => e.annual === isp.annual);
+  const entry = {
+    annual:    isp.annual    || '',
+    variance:  isp.variance  || '',
+    releases:  isp.releases  || '',
+    scheduled: isp.scheduled || '',
+    invite:    isp.invite    || '',
+    submitted: isp.submitted || '',
+    status:    isp.status    || '',
+    ts: existingIdx >= 0 ? log[existingIdx].ts : Date.now()
+  };
+  if (existingIdx >= 0) {
+    log[existingIdx] = entry; // update in place
+  } else {
+    log.push(entry); // new ARUD cycle
+  }
+}
+
+// ── PUNS Log System ───────────────────────────────────────────────────────────
+// Each time PUNS has both finalized and submitted set, append a log entry.
+// Preserves history when finalized date is updated and submitted is cleared.
+
+function appendPUNSLog(mci) {
+  // One log entry per finalized date cycle (keyed by finalized date).
+  // If an entry for this finalized date already exists, update it in place.
+  // A new entry is only created when the finalized date changes to a new cycle.
+  const puns = S.puns[mci] || {};
+  if (!puns.finalized) return;
+  if (!S.puns[mci].punsLog) S.puns[mci].punsLog = [];
+  const log = S.puns[mci].punsLog;
+  const existingIdx = log.findIndex(e => e.finalized === puns.finalized);
+  const entry = {
+    category:  puns.category  || '',
+    finalized: puns.finalized || '',
+    submitted: puns.submitted || '',
+    ts: existingIdx >= 0 ? log[existingIdx].ts : Date.now()
+  };
+  if (existingIdx >= 0) {
+    log[existingIdx] = entry; // update in place
+  } else {
+    log.push(entry); // new finalized cycle
+  }
+}
+
+// ── Emergency Log System ─────────────────────────────────────────────────────
+// Each EP/FFA/Voter type now has a log (emergLog/ffaLog/voterLog) instead of
+// a single flat date. The table still reads the most recent entry via getEmergDate().
+
+function migrateEmergToLog(mci) {
+  const e = S.emergency[mci];
+  if (!e) return;
+  ['emerg','ffa','voter'].forEach(type => {
+    const logKey = type + 'Log';
+    if (!e[logKey] && e[type] && typeof e[type] === 'string' && e[type]) {
+      const nextDue = fd(addYrs(pd(e[type]), 1));
+      e[logKey] = [{completed: e[type], nextDue, ts: Date.now()}];
+    }
+    if (!e[logKey]) e[logKey] = [];
+  });
+}
+
+function getEmergDate(mci, type) {
+  const e = S.emergency[mci] || {};
+  const log = e[type + 'Log'] || [];
+  if (!log.length) return e[type] || '';
+  const sorted = [...log].sort((a,b) => (pd(b.completed)||0) - (pd(a.completed)||0));
+  return sorted[0]?.completed || '';
+}
+
+function updateEmergNextDue(type) {
+  const val = document.getElementById('em-new-' + type).value;
+  const nextEl = document.getElementById('em-nextdue-' + type);
+  nextEl.value = (val && pd(val)) ? fd(addYrs(pd(val), 1)) : '';
+}
+
+function addEmergEntry(type) {
+  const completed = document.getElementById('em-new-' + type).value;
+  if (!completed) { toast('Please enter a Completed Date', true); return; }
+  migrateEmergToLog(_emergMCI);
+  const logKey = type + 'Log';
+  if (!S.emergency[_emergMCI]) S.emergency[_emergMCI] = {};
+  if (!S.emergency[_emergMCI][logKey]) S.emergency[_emergMCI][logKey] = [];
+  const nextDue = fd(addYrs(pd(completed), 1));
+  S.emergency[_emergMCI][logKey].push({completed, nextDue, ts: Date.now()});
+  S.emergency[_emergMCI][type] = getEmergDate(_emergMCI, type);
+  auditEntry(_emergMCI, type.toUpperCase() + ' Log', 'Added', 'Completed: ' + fd(pd(completed)) + ' · Next Due: ' + nextDue);
+  save();
+  document.getElementById('em-new-' + type).value = '';
+  document.getElementById('em-nextdue-' + type).value = '';
+  renderEmergSectionStatus(_emergMCI, type);
+  render();
+  toast('Entry added');
+}
+
+// SC only sees current status (last done + next due) — full log stored in JSON for coach
+function renderEmergSectionStatus(mci, type) {
+  const container = document.getElementById('em-status-' + type);
+  if (!container) return;
+  const lastDone = getEmergDate(mci, type);
+  if (!lastDone) {
+    container.innerHTML = '<span style="color:var(--text3)">No entry logged yet.</span>';
+    return;
+  }
+  const nextDue = fd(addYrs(pd(lastDone), 1));
+  const isOverdue = pd(nextDue) && pd(nextDue) < new Date();
+  container.innerHTML =
+    '<span style="font-weight:600">Last Done:</span> ' + escapeHtml(fd(pd(lastDone))) +
+    ' &nbsp;·&nbsp; <span style="font-weight:600">Next Due:</span> ' +
+    '<span style="color:' + (isOverdue ? 'var(--red)' : 'var(--green,#16a34a)') + '">' +
+    escapeHtml(nextDue) + '</span>';
+}
+
+// Keep as stub for backward compat — SC no longer shows history in modal
+function renderEmergSectionHistory(mci, type) {
+  renderEmergSectionStatus(mci, type);
+}
+
+async function deleteEmergEntry(type, idx) {
+  if (!await showConfirm('Delete this entry?','Delete Entry','Delete','btn btn-danger')) return;
+  const logKey = type + 'Log';
+  S.emergency[_emergMCI][logKey].splice(idx, 1);
+  S.emergency[_emergMCI][type] = getEmergDate(_emergMCI, type);
+  save();
+  renderEmergSectionStatus(_emergMCI, type);
+  render();
+  toast('Entry deleted');
+}
+
 function openEmergModal(mci){
   _emergMCI=mci;
-  const c=S.clients.find(x=>x.mci===mci),e=S.emergency[mci]||{};
-  document.getElementById('emergModalTitle').textContent=`Emergency/FFA — ${c.last}, ${c.first}`;
-  document.getElementById('em-emerg').value=e.emerg||'';
-  document.getElementById('em-ffa').value=e.ffa||'';
+  migrateEmergToLog(mci);
+  const c=S.clients.find(x=>x.mci===mci), e=S.emergency[mci]||{};
+  document.getElementById('emergModalTitle').textContent='Emergency/FFA/Voter — ' + c.last + ', ' + c.first;
+  ['emerg','ffa','voter'].forEach(function(type) {
+    document.getElementById('em-new-' + type).value = '';
+    document.getElementById('em-nextdue-' + type).value = '';
+    renderEmergSectionStatus(mci, type);
+  });
   const clientAge = c.dob ? age(c.dob) : null;
-  const voterEl = document.getElementById('em-voter');
-  if (clientAge !== null && clientAge < 18) {
-    voterEl.value=''; voterEl.disabled=true;
-    voterEl.style.background='var(--surface2)'; voterEl.style.color='var(--text3)';
-    voterEl.title='Voter Registration not applicable for consumers under 18';
+  const isUnder18 = clientAge !== null && clientAge < 18;
+  const voterSection = document.getElementById('emerg-section-voter');
+  const voterLabel = document.getElementById('em-voter-label');
+  if (isUnder18) {
+    voterSection.style.opacity = '0.45';
+    voterSection.style.pointerEvents = 'none';
+    if (voterLabel) voterLabel.textContent = 'Voter Registration (N/A — under 18)';
   } else {
-    voterEl.value=e.voter||''; voterEl.disabled=false;
-    voterEl.style.background=''; voterEl.style.color=''; voterEl.title='';
+    voterSection.style.opacity = '';
+    voterSection.style.pointerEvents = '';
+    if (voterLabel) voterLabel.textContent = 'Voter Registration';
   }
   document.getElementById('em-lc').value=e.lc||'';
   document.getElementById('em-res').value=e.res||'';
@@ -3764,23 +4039,16 @@ function openEmergModal(mci){
   openModal('emergModal');
 }
 
-async function clearEmergencyEntry() {
-  if (!_emergMCI) return;
-  if (!await showConfirm('Clear this Emergency / FFA / Voter entry?','Clear Entry','Clear','btn btn-danger')) return;
 
-  S.emergency[_emergMCI] = {};
-  save();
-  closeModal('emergModal');
-  render();
-  toast('Emergency entry cleared');
-}
 
 function saveEmerg(){
-  const emergErr = validateAllDatesIn('emergModal'); if (emergErr) { toast(emergErr, true); return; }
+  // EP/FFA/Voter are saved via addEmergEntry() — this only saves lc/res/recert
   const prevE=S.emergency[_emergMCI]||{};
-  const _voterSave=document.getElementById('em-voter').disabled?(S.emergency[_emergMCI]?.voter||''):document.getElementById('em-voter').value;
-  S.emergency[_emergMCI]={emerg:document.getElementById('em-emerg').value,ffa:document.getElementById('em-ffa').value,voter:_voterSave,lc:document.getElementById('em-lc').value,res:document.getElementById('em-res').value,recert:document.getElementById('em-recert').value};
-  const _es=auditSummary(prevE,S.emergency[_emergMCI],['emerg','ffa','voter','lc','res','recert']); if(_es) auditEntry(_emergMCI,'Emergency',Object.keys(prevE).length?'Updated':'Logged',_es);
+  if (!S.emergency[_emergMCI]) S.emergency[_emergMCI] = {};
+  S.emergency[_emergMCI].lc = document.getElementById('em-lc').value;
+  S.emergency[_emergMCI].res = document.getElementById('em-res').value;
+  S.emergency[_emergMCI].recert = document.getElementById('em-recert').value;
+  const _es=auditSummary(prevE,S.emergency[_emergMCI],['lc','res','recert']); if(_es) auditEntry(_emergMCI,'Emergency',Object.keys(prevE).length?'Updated':'Logged',_es);
   save();closeModal('emergModal');render();if(document.getElementById('sec-dashboard')?.classList.contains('active'))renderDashboard();toast('Saved');
 }
 
@@ -4062,6 +4330,10 @@ function renderABTracker() {
   }).join('');
   renderPagination('ab', rows.length, 'pg-ab');
 
+  }catch(e){
+    console.error('A/B Tracker failed to render', e);
+    const tb = document.getElementById('ab-body');
+    if (tb) tb.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:32px;color:var(--red)">⚠️ This tab hit an error and couldn\'t load. Try switching tabs and back.</td></tr>';
   }finally{_rendering.ab=false;}
 }
 
@@ -4352,79 +4624,42 @@ async function confirmSelectiveImport() {
 
 // Old XLSX importBackup removed — handled by selective import
 
-// Advance a single client's annual review date to their future ARUD
-async function advanceISP(mci) {
+// Advance a single client's annual review date — opens a modal so the SC types
+// in the new ARUD manually (plans don't always renew exactly 1 year out).
+let _advanceARUDMci = null;
+function advanceISP(mci) {
+  _advanceARUDMci = mci;
+  const c = S.clients.find(x => x.mci === mci);
+  const msgEl = document.getElementById('advanceARUDModal-msg');
+  if (msgEl) msgEl.textContent = `Enter the new Annual Review Date for ${c?.last||''}, ${c?.first||''}. This clears the Submitted date and resets the ISP timeline for the new cycle.`;
+  const dateEl = document.getElementById('advance-arud-date');
+  if (dateEl) dateEl.value = '';
+  openModal('advanceARUDModal');
+}
+
+async function confirmAdvanceISP() {
+  const mci = _advanceARUDMci;
+  if (!mci) return;
+  const newDate = document.getElementById('advance-arud-date')?.value;
+  if (!newDate) return toast('Please enter the new Annual Review Date', true);
   const isp = S.isp[mci] || {};
-  const calc = ispCalc(isp);
-  if (!calc.futureARUD) return toast('No Future ARUD calculated — enter Annual Review Date first', true);
-  const newDate = calc.futureARUD.toISOString().split('T')[0];
-  if (!await showConfirm(`Advance Annual Review Date to ${fd(calc.futureARUD)} for ${S.clients.find(c=>c.mci===mci)?.last}, ${S.clients.find(c=>c.mci===mci)?.first}?\n\nThis clears the Submitted date and resets the ISP timeline.`,'Advance ARUD','Yes, Advance')) return;
+  closeModal('advanceARUDModal');
+  // Log the current submission before wiping it
+  appendISPLog(mci);
+  const prevLog = S.isp[mci]?.ispLog || [];
   S.isp[mci] = {
     annual: newDate,
     variance: isp.variance || '',
     releases: '', scheduled: '', invite: '', submitted: '',
-    status: '', comments: isp.comments || ''
+    status: '', comments: isp.comments || '',
+    ispLog: prevLog
   };
   auditEntry(mci, 'ISP', 'Advanced to Next ARUD', `New annual: ${newDate}`);
   save(); renderISP();
-  toast(`Advanced to next ARUD: ${fd(calc.futureARUD)}`);
+  if (document.getElementById('sec-dashboard')?.classList.contains('active')) renderDashboard();
+  toast(`Advanced to next ARUD: ${fd(newDate)}`);
 }
 
-// Advance ALL submitted clients to their future ARUD
-async function advanceToFutureARUD() {
-  const eligible = S.clients.filter(c => {
-    const isp = S.isp[c.mci] || {};
-    const calc = ispCalc(isp);
-    return c.status === 'Active' && isp.submitted && calc.futureARUD;
-  });
-  if (!eligible.length) { toast('No submitted ISPs with a Future ARUD to advance', true); return; }
-  if (!await showConfirm(`Advance ${eligible.length} client(s) to their Future ARUD?\n\nThis sets new Annual Review Dates and resets ISP timelines.`,'Advance All ARUDs','Yes, Advance')) return;
-  eligible.forEach(c => {
-    const isp = S.isp[c.mci] || {};
-    const calc = ispCalc(isp);
-    const newDate = calc.futureARUD.toISOString().split('T')[0];
-    S.isp[c.mci] = {
-      annual: newDate, variance: isp.variance || '',
-      releases: '', scheduled: '', invite: '', submitted: '',
-      status: '', comments: isp.comments || ''
-    };
-    auditEntry(c.mci, 'ISP', 'Advanced to Next ARUD', `New annual: ${newDate}`);
-  });
-  save(); renderISP();
-  toast(`${eligible.length} client(s) advanced to next ARUD`);
-}
-
-async function clearAllISP() {
-  if (!await showConfirm('Clear all ISP data for all clients?','Clear All ISP','Clear All','btn btn-danger')) return;
-  S.clients.forEach(c => { S.isp[c.mci] = {}; });
-  save();
-  render();
-  toast('All ISP data cleared');
-}
-
-async function clearAllPUNS() {
-  if (!await showConfirm('Clear all PUNS data for all clients?','Clear All PUNS','Clear All','btn btn-danger')) return;
-  S.clients.forEach(c => { S.puns[c.mci] = {}; });
-  save();
-  render();
-  toast('All PUNS data cleared');
-}
-
-async function clearAllEmergency() {
-  if (!await showConfirm('Clear all Emergency / FFA / Voter data for all clients?','Clear All','Clear All','btn btn-danger')) return;
-  S.clients.forEach(c => { S.emergency[c.mci] = {}; });
-  save();
-  render();
-  toast('All Emergency / FFA / Voter data cleared');
-}
-
-async function clearAllAB() {
-  if (!await showConfirm('Clear all A/B tracker data for all clients?','Clear All A/B','Clear All','btn btn-danger')) return;
-  S.clients.forEach(c => { S.abTracker[c.mci] = {}; });
-  save();
-  renderABTracker();
-  toast('All A/B data cleared');
-}
 
 // ================================================================
 // EXPORT TO EXCEL
@@ -4558,14 +4793,14 @@ async function exportExcel(){
 
   // ── Sheet 3: ISP Timeline ──
   if (doISP) {
-  const ispData=[['MCI#','Last Name','First Name','Annual Review','Variance','Timeline Start (−120d)','Last ISP Date (−60d)','ISP Scheduled','Invite Due','Invite Completed','Submit By (−50d)','Submitted','Future ARUD','Plan Status','Comments']];
+  const ispData=[['MCI#','Last Name','First Name','Annual Review','Variance','Timeline Start (−120d)','Last ISP Date (−60d)','ISP Scheduled','Invite Due','Invite Completed','Submit By (−50d)','Submitted','Plan Status','Comments']];
   S.clients.forEach(c=>{
     const isp=S.isp[c.mci]||{},calc=ispCalc(isp);
     ispData.push([padMCI(c.mci),c.last,c.first,isp.annual?fd(isp.annual):'',isp.variance||'',
       calc.start?fd(calc.start):'',calc.lastISP?fd(calc.lastISP):'',isp.scheduled?fd(isp.scheduled):'',
       calc.inviteDue?fd(calc.inviteDue):'',isp.invite?fd(isp.invite):'',
       calc.submitBy?fd(calc.submitBy):'',isp.submitted?fd(isp.submitted):'',
-      calc.futureARUD?fd(calc.futureARUD):'',isp.status||'',isp.comments||'']);
+      isp.status||'',isp.comments||'']);
   });
   makeExcelTable(wb, ispData, 'ISP Timeline');
   }
@@ -4694,8 +4929,11 @@ const ALL_GROUPS = ['Monitoring','PUNS','ISP','Emergency'];
 let _collapsedGroups = new Set(JSON.parse(localStorage.getItem(COLLAPSED_KEY)||JSON.stringify(ALL_GROUPS)));
 
 function alertKey(a) {
-  // Unique key: mci + category + issue type (not detail, so it reappears if the date changes)
-  return `${a.c.mci}_${a.cat}_${a.s}`;
+  // Unique key: mci + category + severity + issue text (not detail, so it reappears if
+  // the date changes). Issue text is included because Monitoring Partial and Monitoring
+  // Critical now share the same severity ('overdue') but are different, independently
+  // dismissable alerts.
+  return `${a.c.mci}_${a.cat}_${a.s}_${a.issue}`;
 }
 
 function getDashLogBtn(a) {
@@ -4705,9 +4943,8 @@ function getDashLogBtn(a) {
   if (a.cat === 'Monitoring') return `<button type="button" class="btn btn-ghost btn-sm" style="font-size:11px;padding:3px 8px;margin-right:4px" onclick="openMonModal('${mci}',${mo},${yr})">Log</button>`;
   if (a.cat === 'ISP') {
     const isp = S.isp[mci] || {};
-    const calc = ispCalc(isp);
-    const nextArud = isp.submitted && calc.futureARUD
-      ? `<button type="button" class="btn btn-neutral btn-sm" style="font-size:11px;padding:3px 8px;margin-right:4px" onclick="advanceISP('${mci}')" title="Advance to next ARUD: ${fd(calc.futureARUD)}">→ Next ARUD</button>`
+    const nextArud = isp.submitted
+      ? `<button type="button" class="btn btn-neutral btn-sm" style="font-size:11px;padding:3px 8px;margin-right:4px" onclick="advanceISP('${mci}')" title="Advance to next ARUD cycle">→ Next ARUD</button>`
       : '';
     return `<button type="button" class="btn btn-ghost btn-sm" style="font-size:11px;padding:3px 8px;margin-right:4px" onclick="openISPModal('${mci}')">Log</button>${nextArud}`;
   }
@@ -4766,7 +5003,7 @@ function initInstructions() {
     ['instr-overview','Overview'],['instr-setup','First-Time Setup'],['instr-caseload','Caseload'],
     ['instr-monitoring','Monitoring'],['instr-isp','ISP Timeline'],['instr-puns','PUNS'],
     ['instr-emergency','Emergency / FFA / Voter'],['instr-ab','A/B Tracker'],
-    ['instr-backup','Saving & Backup'],['instr-dashboard','Dashboard & Alerts'],
+    ['instr-backup','Saving & Backup'],['instr-dashboard','Items Needing Attention'],
   ];
   const nav = document.getElementById('instr-nav');
   if (!nav) return;
@@ -5778,6 +6015,19 @@ document.addEventListener('DOMContentLoaded', async function() {
     S.emergency = S.emergency || {};
     S.abTracker = S.abTracker || {};
     S.meta = S.meta || {};
+    // Migrate old emergency flat dates to log format
+    S.clients.forEach(function(c) { if (S.emergency[c.mci]) migrateEmergToLog(c.mci); });
+    // Seed ISP/PUNS logs from existing data if not already logged
+    S.clients.forEach(function(c) {
+      if (S.isp[c.mci] && !S.isp[c.mci].ispLog) {
+        S.isp[c.mci].ispLog = [];
+        appendISPLog(c.mci);
+      }
+      if (S.puns[c.mci] && !S.puns[c.mci].punsLog) {
+        S.puns[c.mci].punsLog = [];
+        appendPUNSLog(c.mci);
+      }
+    });
   } else {
     load();
   }

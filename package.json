@@ -1,6 +1,6 @@
 {
   "name": "eccm-caseload-tracker",
-  "version": "1.4.0",
+  "version": "1.4.1",
   "description": "ECCM SC Caseload Tracker",
   "author": "Erie County Care Management",
   "main": "main.js",
