@@ -12,6 +12,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   retryPendingAzure:  ()      => ipcRenderer.invoke('retry-pending-azure'),
   hasPendingAzure:    ()      => ipcRenderer.invoke('has-pending-azure'),
   importBackup:       ()      => ipcRenderer.invoke('import-backup'),
+  importCsvCaseload:  ()      => ipcRenderer.invoke('import-csv-caseload'),
   listBackups:        ()      => ipcRenderer.invoke('list-backups'),
   loadBackupFile:     (p)     => ipcRenderer.invoke('load-backup-file', p),
   exportJson:         (args)  => ipcRenderer.invoke('export-json', args),
@@ -21,6 +22,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getAppVersion:      ()      => ipcRenderer.invoke('get-app-version'),
   openFolder:         (p)     => ipcRenderer.invoke('open-folder', p),
   onAppClosing:       (cb)    => ipcRenderer.on('app-closing', cb),
+  onSystemResumed:    (cb)    => ipcRenderer.on('system-resumed', cb),
   // Auto-update
   checkForUpdates:    ()      => ipcRenderer.invoke('check-for-updates'),
   downloadUpdate:     ()      => ipcRenderer.invoke('download-update'),

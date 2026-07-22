@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell, powerMonitor } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const https = require('https');
@@ -108,9 +108,19 @@ try {
   autoUpdater = require('electron-updater').autoUpdater;
   autoUpdater.autoDownload = false;
   autoUpdater.autoInstallOnAppQuit = true;
-  // Force update check in dev mode for debugging
+  // Update-checking only works unpacked (npm start) if dev-app-update.yml is
+  // sitting next to main.js — a build artifact electron-builder regenerates
+  // fresh in dist/ on every `npm run build`. Only force dev-mode config when
+  // that file is actually present; otherwise this always attempted it and
+  // failed with ENOENT on every single dev-mode launch. Doesn't affect the
+  // real packaged app at all — that gets update info directly from GitHub.
   if (!app.isPackaged) {
-    autoUpdater.forceDevUpdateConfig = true;
+    const devConfigPath = path.join(__dirname, 'dev-app-update.yml');
+    if (fs.existsSync(devConfigPath)) {
+      autoUpdater.forceDevUpdateConfig = true;
+    } else {
+      console.log('No dev-app-update.yml found next to main.js — skipping update check in dev mode (this never affects the packaged app).');
+    }
   }
   autoUpdater.on('checking-for-update', () => sendUpdateStatus('checking', {}));
   autoUpdater.on('update-available', (info) => sendUpdateStatus('available', info));
@@ -200,7 +210,20 @@ function createWindow() {
   mainWindow.setMenu(null);
 }
 
-app.whenReady().then(createWindow);
+app.whenReady().then(() => {
+  createWindow();
+  // A network blip right as the PC wakes from sleep is exactly the kind of
+  // thing that can leave an Azure sync silently stuck until the next app
+  // launch (see startAutoBackupTimer in the renderer for the periodic
+  // safety net). This catches it immediately instead of waiting up to 7
+  // minutes for the next timer tick.
+  powerMonitor.on('resume', () => {
+    console.log('System resumed from sleep — notifying renderer to retry any pending Azure upload');
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('system-resumed');
+    }
+  });
+});
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
 app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
 
@@ -354,6 +377,22 @@ ipcMain.handle('import-backup', async () => {
   } catch(e) { return { error: e.message }; }
 });
 
+// ── Import Caseload from CSV (HCSIS roster report) ─────────
+ipcMain.handle('import-csv-caseload', async () => {
+  if (mainWindow) mainWindow.focus();
+  const result = await dialog.showOpenDialog(mainWindow, {
+    title: 'Import Caseload CSV',
+    filters: [{ name: 'CSV Files', extensions: ['csv'] }],
+    properties: ['openFile'], buttonLabel: 'Import'
+  });
+  if (result.canceled) return null;
+  try {
+    const raw = fs.readFileSync(result.filePaths[0], 'utf8');
+    console.log('Caseload CSV read:', path.basename(result.filePaths[0]));
+    return { text: raw, name: path.basename(result.filePaths[0]) };
+  } catch(e) { return { error: e.message }; }
+});
+
 ipcMain.handle('list-backups', () => {
   try {
     const settings = getSettings();
@@ -433,7 +472,14 @@ ipcMain.handle('open-folder', (event, p) => { shell.openPath(p); });
 // ── Auto-update IPC ───────────────────────────────────────────
 ipcMain.handle('check-for-updates', () => {
   if (autoUpdater) {
-    try { autoUpdater.checkForUpdates(); }
+    try {
+      // checkForUpdates() returns a Promise — a synchronous try/catch here
+      // only catches a synchronous throw, not that promise's own rejection.
+      // The actual error is already reported via the autoUpdater.on('error')
+      // listener above; this .catch() just prevents Node from flagging it
+      // as an unhandled rejection on top of that.
+      autoUpdater.checkForUpdates().catch(() => {});
+    }
     catch(e) { sendUpdateStatus('error', {}); }
   } else {
     sendUpdateStatus('not-available', {});

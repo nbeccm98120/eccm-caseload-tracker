@@ -39,6 +39,7 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);font-size:14
 .notif-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:8px 16px;font-size:12px;font-weight:600;border-bottom:1px solid rgba(255,255,255,.15);}
 .notif-row:last-child{border-bottom:none;}
 .notif-update{background:var(--accent);color:#fff;}
+.notif-info{background:#0891b2;color:#fff;}
 .notif-btn{background:rgba(255,255,255,.2);border:1px solid rgba(255,255,255,.4);color:#fff;border-radius:4px;padding:3px 10px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;}
 .notif-btn:hover{background:rgba(255,255,255,.35);}
 .notif-dismiss{background:none;border:none;color:rgba(255,255,255,.75);cursor:pointer;font-size:16px;line-height:1;padding:0 4px;flex-shrink:0;}
@@ -343,6 +344,7 @@ input[type="date"]::-webkit-calendar-picker-indicator{cursor:pointer;}
 .setup-card{
   background:#fff;border-radius:20px;padding:40px;max-width:480px;width:100%;
   box-shadow:0 10px 30px rgba(0,0,0,.08);border:1px solid #e5e7eb;
+  transition:max-width .2s ease;
 }
 .setup-logo{font-size:24px;font-weight:800;color:var(--accent);margin-bottom:6px;letter-spacing:-.5px;}
 .setup-sub{font-size:13px;color:var(--text3);margin-bottom:28px;}
@@ -493,6 +495,7 @@ tbody tr.mr-critical td{}
           <button type="button" class="overflow-item success" onclick="openModal('exportModal');closeOverflow()">⬇ Export Caseload Pages</button>
           <button type="button" class="overflow-item" onclick="exportBackup();closeOverflow()">📤 Save / Share Records</button>
           <button type="button" class="overflow-item" onclick="triggerImportBackup();closeOverflow()">📥 Load Records</button>
+          <button type="button" class="overflow-item" onclick="showSec('csvImport');closeOverflow()">📋 Import Caseload</button>
           <button type="button" class="overflow-item" id="export-selected-btn" onclick="triggerExportSelected();closeOverflow()" style="display:none">📤 Export Selected Consumers</button>
           <div class="overflow-divider"></div>
           <button type="button" class="overflow-item" id="set-backup-folder-btn" onclick="changeBackupFolder();closeOverflow()" style="display:none">📁 Set Data Folder</button>
@@ -505,6 +508,7 @@ tbody tr.mr-critical td{}
       </div>
     </div>
     <input type="file" id="backup-file-input" accept=".json,application/json" style="display:none" onchange="importBackup(event)">
+    <input type="file" id="csv-import-file-input" accept=".csv,text/csv" style="display:none" onchange="importCsvCaseloadFile(event)">
   </div>
 
   <div class="main">
@@ -524,21 +528,8 @@ tbody tr.mr-critical td{}
         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
           <div class="search-wrap"><input type="text" id="dash-search" placeholder="Search consumer or MCI#…" oninput="renderDashboard();onSearchInput('dash-search')" style="width:220px"><button type="button" class="search-clear" id="dash-search-clear" onclick="clearSearch('dash-search',renderDashboard)" title="Clear search">✕</button></div><span id="cf-badge-dashboard" style="display:none;align-items:center;gap:4px;background:var(--accent-light);border:1px solid var(--accent);border-radius:12px;padding:2px 8px;font-size:11px;color:var(--accent);font-weight:600;cursor:pointer;white-space:nowrap" onclick="clearAllColFilters('dashboard')" title="Clear all column filters">⊘ Filtered ✕</span>
         </div>
-        <!-- Category filter: which area(s) to show -->
-        <div class="dash-filter-bar" id="dash-cat-bar" style="margin-bottom:0">
-          <button type="button" class="dash-ftab active" onclick="setDashCategory('all',this)">All</button>
-          <button type="button" class="dash-ftab" onclick="setDashCategory('mon',this)">Monitoring</button>
-          <button type="button" class="dash-ftab" onclick="setDashCategory('isp',this)">ISP</button>
-          <button type="button" class="dash-ftab" onclick="setDashCategory('puns',this)">PUNS</button>
-          <button type="button" class="dash-ftab" onclick="setDashCategory('emerg',this)">EP / FFA / Voter</button>
-        </div>
-        <!-- Severity/period filter -->
-        <div class="dash-filter-bar" id="dash-filter-bar" style="margin-bottom:0">
-          <button type="button" class="dash-ftab active" onclick="setDashFilter('all',this)">All</button>
-          <button type="button" class="dash-ftab" onclick="setDashFilter('overdue',this)">🔴 Critical</button>
-          <button type="button" class="dash-ftab" onclick="setDashFilter('due_this_month',this)">Due This Month</button>
-          <button type="button" class="dash-ftab" onclick="setDashFilter('due_next_month',this)">Due Next Month</button>
-        </div>
+        <!-- Clip bar: Category -> Subtype (ISP/Emergency only) -> Period. Rebuilt each render by renderDashClipBar(). -->
+        <div id="dash-clip-bar"></div>
       </div>
       <!-- Restore dismissed bar -->
       <div id="dash-restore-bar" class="dash-restore-bar" style="display:none">
@@ -550,6 +541,48 @@ tbody tr.mr-critical td{}
     </div>
 
     <!-- CASELOAD -->
+    <div class="section" id="sec-csvImport">
+      <div class="sec-header">
+        <div>
+          <div class="sec-title">Import Caseload</div>
+          <div class="sec-sub">Import consumers from a caseload roster instead of adding them one by one</div>
+        </div>
+      </div>
+
+      <div id="import-csv-picker" style="max-width:480px;margin:48px auto 0;text-align:center">
+        <p style="font-size:13px;color:var(--text2);margin-bottom:16px">If Admin gave you your caseload roster, choose the file below. Consumers already in your caseload (matched by MCI#) are shown for reference and are never overwritten.</p>
+        <button type="button" class="btn" onclick="triggerImportCsvCaseload()">📋 Choose File</button>
+      </div>
+
+      <div id="import-csv-review" style="display:none">
+        <div id="import-csv-source-info" style="font-size:12px;color:var(--text3);margin-bottom:12px"></div>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;gap:10px;flex-wrap:wrap">
+          <div>
+            <button type="button" class="btn btn-ghost btn-sm" onclick="csvImportChooseAnother()">Choose a Different File</button>
+            <button type="button" class="btn btn-neutral btn-sm" onclick="cancelCsvImport()" style="margin-left:8px">Cancel</button>
+          </div>
+          <button type="button" class="btn" id="import-csv-commit-btn" onclick="commitCsvImport()">Import Selected</button>
+        </div>
+        <div style="border:1px solid var(--border);border-radius:var(--radius-sm)">
+          <table style="width:100%;border-collapse:collapse;font-size:12px">
+            <thead>
+              <tr style="background:var(--surface2);position:sticky;top:0">
+                <th style="padding:8px;width:32px"><input type="checkbox" id="import-csv-check-all" onchange="csvImportSelectAll(this.checked)"></th>
+                <th style="padding:8px;text-align:left">Consumer</th>
+                <th style="padding:8px;text-align:left">MCI#</th>
+                <th style="padding:8px;text-align:left">DOB</th>
+                <th style="padding:8px;text-align:left">Waiver</th>
+                <th style="padding:8px;text-align:left">Status</th>
+                <th style="padding:8px;width:60px"></th>
+              </tr>
+            </thead>
+            <tbody id="import-csv-body"></tbody>
+          </table>
+        </div>
+        <p style="font-size:11px;color:var(--text3);margin-top:8px">Click <strong>Log</strong> on any row to add Monitoring, ISP, PUNS, or Emergency/FFA/Voter details for that consumer — completely optional, and can always be added later from the Caseload Tracker instead.</p>
+      </div>
+    </div>
+
     <div class="section" id="sec-caseload">
       <div class="sec-header">
         <div>
@@ -644,7 +677,7 @@ tbody tr.mr-critical td{}
         <div id="pg-isp"></div>
         <div class="table-wrap isp-wrap">
           <table><thead><tr>
-            <th class="sortable" onclick="setSort('isp','client')">Consumer<span id="sort-isp-client"></span></th><th class="sortable" onclick="setSort('isp','mci')">MCI#<span id="sort-isp-mci"></span></th><th>Waiver <button class="cf-btn" id="cfb-isp-waiver" onclick="event.stopPropagation();openColFilter(event,'isp','waiver')" title="Filter">▾</button><span id="sort-isp-waiver"></span></th><th class="sortable" onclick="setSort('isp','annual')">Annual Review<span id="sort-isp-annual"></span></th><th class="sortable" onclick="setSort('isp','start')">Start −120d<span id="sort-isp-start"></span></th><th class="sortable" onclick="setSort('isp','lastIsp')">Last ISP −60d<span id="sort-isp-lastIsp"></span></th><th class="sortable" onclick="setSort('isp','scheduled')">ISP Scheduled<span id="sort-isp-scheduled"></span></th><th class="sortable" onclick="setSort('isp','inviteDue')">Invite Due<span id="sort-isp-inviteDue"></span></th><th class="sortable" onclick="setSort('isp','invite')">Invite Done<span id="sort-isp-invite"></span></th><th class="sortable" onclick="setSort('isp','submitBy')">Submit By −50d<span id="sort-isp-submitBy"></span></th><th class="sortable" onclick="setSort('isp','submitted')">Submitted<span id="sort-isp-submitted"></span></th><th>Status <button class="cf-btn" id="cfb-isp-status" onclick="event.stopPropagation();openColFilter(event,'isp','status')" title="Filter">▾</button><span id="sort-isp-status"></span></th><th class="sortable" onclick="setSort('isp','variance')">Variance<span id="sort-isp-variance"></span></th><th></th>
+            <th class="sortable" onclick="setSort('isp','client')">Consumer<span id="sort-isp-client"></span></th><th class="sortable" onclick="setSort('isp','mci')">MCI#<span id="sort-isp-mci"></span></th><th>Waiver <button class="cf-btn" id="cfb-isp-waiver" onclick="event.stopPropagation();openColFilter(event,'isp','waiver')" title="Filter">▾</button><span id="sort-isp-waiver"></span></th><th class="sortable" onclick="setSort('isp','annual')">Annual Review<span id="sort-isp-annual"></span></th><th class="sortable" onclick="setSort('isp','start')">Start −120d<span id="sort-isp-start"></span></th><th class="sortable" onclick="setSort('isp','scheduleTarget')" title="Suggested date to have the ISP meeting scheduled by — midpoint between Start and Last ISP">Schedule Target −90d<span id="sort-isp-scheduleTarget"></span></th><th class="sortable" onclick="setSort('isp','lastIsp')">Last ISP −60d<span id="sort-isp-lastIsp"></span></th><th class="sortable" onclick="setSort('isp','scheduled')">ISP Scheduled<span id="sort-isp-scheduled"></span></th><th class="sortable" onclick="setSort('isp','inviteDue')">Invite Due<span id="sort-isp-inviteDue"></span></th><th class="sortable" onclick="setSort('isp','invite')">Invite Done<span id="sort-isp-invite"></span></th><th class="sortable" onclick="setSort('isp','submitBy')">Submit By −50d<span id="sort-isp-submitBy"></span></th><th class="sortable" onclick="setSort('isp','submitted')">Submitted<span id="sort-isp-submitted"></span></th><th>Status <button class="cf-btn" id="cfb-isp-status" onclick="event.stopPropagation();openColFilter(event,'isp','status')" title="Filter">▾</button><span id="sort-isp-status"></span></th><th class="sortable" onclick="setSort('isp','variance')">Variance<span id="sort-isp-variance"></span></th><th></th>
           </tr></thead><tbody id="isp-body"></tbody></table>
         </div>
       </div>
@@ -723,6 +756,7 @@ tbody tr.mr-critical td{}
           <a href="#instr-setup" style="display:block;padding:7px 10px;border-radius:var(--radius-xs);font-size:13px;color:var(--text2);text-decoration:none;transition:background .12s" onmouseover="this.style.background='var(--accent-light)';this.style.color='var(--accent)'" onmouseout="this.style.background='';this.style.color='var(--text2)'">Getting Started</a>
           <a href="#instr-backup" style="display:block;padding:7px 10px;border-radius:var(--radius-xs);font-size:13px;color:var(--text2);text-decoration:none;transition:background .12s" onmouseover="this.style.background='var(--accent-light)';this.style.color='var(--accent)'" onmouseout="this.style.background='';this.style.color='var(--text2)'">Data & Records</a>
           <a href="#instr-caseload" style="display:block;padding:7px 10px;border-radius:var(--radius-xs);font-size:13px;color:var(--text2);text-decoration:none;transition:background .12s" onmouseover="this.style.background='var(--accent-light)';this.style.color='var(--accent)'" onmouseout="this.style.background='';this.style.color='var(--text2)'">Managing Consumers</a>
+          <a href="#instr-csv-import" style="display:block;padding:7px 10px;border-radius:var(--radius-xs);font-size:13px;color:var(--text2);text-decoration:none;transition:background .12s" onmouseover="this.style.background='var(--accent-light)';this.style.color='var(--accent)'" onmouseout="this.style.background='';this.style.color='var(--text2)'">Import Caseload</a>
           <a href="#instr-transfers" style="display:block;padding:7px 10px;border-radius:var(--radius-xs);font-size:13px;color:var(--text2);text-decoration:none;transition:background .12s" onmouseover="this.style.background='var(--accent-light)';this.style.color='var(--accent)'" onmouseout="this.style.background='';this.style.color='var(--text2)'">Case Transfers</a>
           <a href="#instr-monitoring" style="display:block;padding:7px 10px;border-radius:var(--radius-xs);font-size:13px;color:var(--text2);text-decoration:none;transition:background .12s" onmouseover="this.style.background='var(--accent-light)';this.style.color='var(--accent)'" onmouseout="this.style.background='';this.style.color='var(--text2)'">Monitoring</a>
           <a href="#instr-isp" style="display:block;padding:7px 10px;border-radius:var(--radius-xs);font-size:13px;color:var(--text2);text-decoration:none;transition:background .12s" onmouseover="this.style.background='var(--accent-light)';this.style.color='var(--accent)'" onmouseout="this.style.background='';this.style.color='var(--text2)'">ISP Timeline</a>
@@ -744,7 +778,7 @@ tbody tr.mr-critical td{}
                 <li><strong>Step 2 — Data Folder:</strong> Choose where your records are automatically saved. Select your backup folder — ideally on OneDrive or a shared drive so your data is always protected. This step is required.</li>
                 <li><strong>Step 3 — Confirm:</strong> Review your name, coach, and folder — then click <strong>Get Started</strong>.</li>
               </ul>
-              <p>Once set up, you will land on <strong>Items Needing Attention</strong>. Go to <strong>Caseload → + Add Consumer</strong> to begin adding your consumers.</p>
+              <p>Once set up, you will land on <strong>Items Needing Attention</strong>. Go to <strong>Caseload → + Add Consumer</strong> to begin adding your consumers — or, if Admin gave you a caseload roster, <strong>Actions → Import Caseload</strong> adds them all at once instead.</p>
               <div style="background:var(--accent-light);border:1px solid var(--accent);border-radius:var(--radius-sm);padding:10px 14px;font-size:12px;color:var(--accent)">
                 💡 <strong>Setting up on a new computer?</strong> Click <strong>Restore from Records</strong> on the setup screen instead of entering your info again. Pick your backup file and all your data will be restored automatically.
               </div>
@@ -757,6 +791,7 @@ tbody tr.mr-critical td{}
             <div class="card-body" style="font-size:13px;line-height:1.7;color:var(--text2);display:flex;flex-direction:column;gap:10px">
               <p><strong>How your data is saved:</strong> Every change is saved automatically to your computer. You never need to click Save for individual entries.</p>
               <p><strong>Auto-sync:</strong> Every 7 minutes (if changes were made) and every time you close the app, your records are automatically copied to your backup folder. When closing you will briefly see a <em>"Saving your work..."</em> overlay — this is normal.</p>
+              <p>Your local data and backup folder are never affected by a network problem — those always save regardless. If a sync to the shared cloud copy fails (a brief internet drop, for example), it's automatically retried on the next 7-minute cycle and again right when your computer wakes from sleep, so it recovers on its own without needing to restart the app.</p>
               <div style="display:flex;flex-direction:column;gap:8px;margin-top:4px">
                 <div style="background:var(--surface2);border-radius:var(--radius-sm);padding:10px 14px">
                   <div style="font-weight:600;margin-bottom:3px">📤 Save / Share Records</div>
@@ -785,12 +820,28 @@ tbody tr.mr-critical td{}
             <div class="card-header"><div class="card-title">Managing Consumers</div></div>
             <div class="card-body" style="font-size:13px;line-height:1.7;color:var(--text2);display:flex;flex-direction:column;gap:10px">
               <p>Go to the <strong>Caseload</strong> tab to manage your consumers. Click <strong>+ Add Consumer</strong> to add a new consumer.</p>
-              <p><strong>Required fields:</strong> MCI#, First Name, Last Name, and Waiver Type. All four must be filled in to save.</p>
+              <p><strong>Required fields:</strong> MCI#, First Name, Last Name, Date of Birth, and Waiver Type. All five must be filled in to save.</p>
               <p><strong>MCI#</strong> is always 9 digits — shorter numbers are padded automatically (e.g. 32418 → 000032418).</p>
+              <p><strong>First / Last Name</strong> auto-format to Title Case when you tab out of the field or save — e.g. "abigail" becomes "Abigail". Surnames with an internal capital (McDonald, MacArthur, LaFontaine) will need a manual touch-up afterward, same limitation as Excel's PROPER() function.</p>
+              <p><strong>Date of Opening</strong> is separate from Date Started with Me as SC — it's when the consumer opened with ECCM overall, and drives the new-opening monitoring requirement for Base / SC Services Only consumers (see Monitoring below).</p>
               <p><strong>Status chips:</strong> Use <strong>Active</strong> for current consumers. Use <strong>Inactive</strong> for consumers who have closed services, transferred to another SCO, or moved to a different SC within ECCM. Inactive consumers are hidden from all tracker views but remain in your records for history.</p>
               <p><strong>Moving a consumer to Inactive:</strong> Open the consumer, click <strong>Move to Inactive</strong> in the footer. Use this for closed services, transfers, or SCO changes — not deletion. The consumer's full history is retained. When editing an Inactive consumer, a <strong>Scheduled Removal</strong> date is shown — inactive consumers are automatically and permanently removed after 6 months.</p>
               <p><strong>Comments / Notes:</strong> Click the 💬 button on any consumer row to view or add notes. Notes are visible in the caseload list and can be edited at any time.</p>
               <p><strong>Filtering and sorting:</strong> Each table has a small <strong>▾</strong> arrow on the Waiver and Status column headers. Click it to filter by that column or sort the list. When a filter is active a <strong>⊘ Filtered ✕</strong> badge appears next to the search bar — click it to clear all filters. Use the search bar to find consumers by name or MCI# — an <strong>✕</strong> button appears to clear the search quickly.</p>
+            </div>
+          </div>
+
+          <div id="instr-csv-import" class="card">
+            <div class="card-header"><div class="card-title">Import Caseload</div></div>
+            <div class="card-body" style="font-size:13px;line-height:1.7;color:var(--text2);display:flex;flex-direction:column;gap:10px">
+              <p>If you're just getting started, you don't have to add every consumer by hand. Erie County Care Management can generate an HCSIS roster report and give you a file with your caseload already on it — you don't need to run the HCSIS report yourself, just import the file you're given.</p>
+              <p>Go to <strong>Actions → Import Caseload</strong> — it opens as its own section, the same way Caseload or Monitoring do. If your caseload is empty, a banner at the top offers a shortcut straight there too.</p>
+              <p><strong>What it imports:</strong> Name, MCI#, Date of Birth, and Waiver Type, read directly from the file. Names are auto-formatted to Title Case, same as manual entry.</p>
+              <p><strong>Review before anything is saved:</strong> every row is shown in a table first — nothing is added to your caseload until you click <strong>Import Selected</strong>. Rows are checked automatically when they have everything needed (name, MCI#, DOB, and a recognized waiver); rows missing something are left unchecked with a <strong>Needs review</strong> flag so you can fix them first.</p>
+              <p><strong>Existing consumers are never touched.</strong> If a row's MCI# already matches someone in your caseload, it's shown as <strong>Already in caseload</strong> for reference only — it can't be selected, and this import never changes or overwrites tracking data you already have.</p>
+              <p><strong>Log</strong> expands that row into a full set of fields right in the table — correct their Name, DOB, or Waiver if something didn't come through the file cleanly, and optionally add Date Started with Me, Date of Opening, a Monitoring contact, ISP Annual Review Date, PUNS Finalized Date and Category, or Emergency Preparedness / FFA / Voter Preference dates. Nothing in the file maps to these automatically, so they're all optional — leaving them blank is completely fine, and you can fill them in normally afterward from each consumer's tracker. For Monitoring specifically, Contact Type, Contact Date, and Tool Completed must all be filled in together, or all left blank — closing the row is blocked if only some of the three are filled in. A row shows <strong>Log ✓</strong> once something's been added.</p>
+              <p><strong>Cancel</strong> discards the current review and takes you elsewhere. Navigating away to any other tab while a review is in progress does the same thing automatically — nothing is kept in the background, so coming back to Import Caseload always starts fresh unless you've actually clicked Import Selected.</p>
+              <p>Imported consumers work exactly like manually-added ones — full Monitoring, ISP, PUNS, Emergency/FFA/Voter, Items Needing Attention, and Transfer support from the moment they're added.</p>
             </div>
           </div>
 
@@ -827,7 +878,7 @@ tbody tr.mr-critical td{}
             <div class="card-header"><div class="card-title">Monitoring</div></div>
             <div class="card-body" style="font-size:13px;line-height:1.7;color:var(--text2);display:flex;flex-direction:column;gap:10px">
               <p>Go to <strong>Caseload Tracker → Monitoring</strong>. Use the month strip to navigate, or click <strong>This Month</strong> to return to the current month.</p>
-              <p><strong>Logging a contact:</strong> Click <strong>Log</strong> on any consumer row. Fill in Contact Type, Contact Date, and Tool Completed (HCSIS) date. All three must be filled in for the entry to count as <strong>Done</strong>. The contact date must fall within the selected month and year.</p>
+              <p><strong>Logging a contact:</strong> Click <strong>Log</strong> on any consumer row. Fill in Contact Type, Contact Date, and Tool Completed date. All three must be filled in for the entry to count as <strong>Done</strong>. The contact date must fall within the selected month and year.</p>
               <p><strong>Status indicators:</strong></p>
               <ul style="margin-left:16px;display:flex;flex-direction:column;gap:4px">
                 <li><strong>Done This Month</strong> — all three fields complete ✓</li>
@@ -849,6 +900,7 @@ tbody tr.mr-critical td{}
                 <li>Base / SC Services Only — every 12 months</li>
                 <li>Private ICF/MR / Other — Not Applicable</li>
               </ul>
+              <p><strong>New-opening rule (Base / SC Services Only only):</strong> a brand-new consumer on one of these two waivers has no monitoring history to anchor the normal 12-month cadence to, so without a separate rule they could go a full year with no due-date reminder at all. If <strong>Date of Opening</strong> is set on the consumer, their first monitoring is instead due within <strong>6 months of that date</strong> — e.g. Date of Opening 7/1/2026 → first monitoring due by end of January 2027. This only applies before any monitoring has ever been logged; once a first contact is entered, the normal 12-month cadence takes over from there. Consumers on an actual HCBS waiver (Consolidated / Community Living / P/FDS) are unaffected — they keep today's behavior of no due date until their first monitoring contact is logged. A waiver change always uses whichever waiver is currently selected on the consumer, so switching waivers is picked up automatically.</p>
               <p><strong>Contact Types:</strong> H (Home), HV (Home Video), D (Day Program), DV (Day Video), C (Community), CV (Community Video)</p>
               <p><strong>Filtering:</strong> Click the <strong>▾</strong> arrow on the Waiver column to filter by waiver type. The filter respects the active chip — on the Done chip, only waivers of Done consumers appear. A <strong>⊘ Filtered ✕</strong> badge shows when a filter is active.</p>
             </div>
@@ -861,11 +913,12 @@ tbody tr.mr-critical td{}
               <p><strong>Auto-calculated deadlines:</strong></p>
               <ul style="margin-left:16px;display:flex;flex-direction:column;gap:4px">
                 <li>Start Date — 120 days before Annual Review</li>
+                <li>Schedule Target — 90 days before Annual Review (midpoint between Start and Last ISP) — a suggested date to have the meeting scheduled by, so it doesn't slip too close to the 60-day deadline. Turns red once passed if ISP Scheduled still isn't set.</li>
                 <li>Last ISP Date — 60 days before Annual Review</li>
                 <li>Submit By — 50 days before Annual Review</li>
                 <li>Invite Due — 30 days before scheduled ISP meeting</li>
               </ul>
-              <p><strong>Submitting an ISP:</strong> Once you enter a Submitted date, all deadline columns grey out with a strikethrough and a <strong>→ Next ARUD</strong> button appears on the row. When the ISP is approved and the new annual date is confirmed, click → Next ARUD and type in the new Annual Review Date — this advances the timeline to the next cycle and clears the submitted date. The date isn't calculated automatically since plans don't always renew exactly a year out.</p>
+              <p><strong>Submitting an ISP:</strong> Once you enter a Submitted date, all deadline columns grey out with a strikethrough and a <strong>→ Next ARUD</strong> button appears on the row. When the ISP is approved and the new annual date is confirmed, click → Next ARUD and type in the new Annual Review Date — this advances the timeline to the next cycle and clears the submitted date. The date isn't calculated automatically since plans don't always renew exactly a year out. <strong>ISP Scheduled, Invite Done, and Submitted must all be filled in before Next ARUD is allowed to proceed</strong> — this catches a cycle that got marked Submitted without every step actually being completed along the way.</p>
               <p><strong>ISP Status</strong> is set manually: In Progress → Pending Approval → Approved → Needs Revision. The app does not change status automatically.</p>
               <p>Dates shown in <span style="color:var(--red)">red</span> are past due. Dates in <span style="color:#d97706">yellow/orange</span> are due within 14 days. Once a step is marked done (e.g. Invite Done), its due-date column stops showing red/yellow even if that date has passed — the coloring reflects what's still outstanding, not what's already finished. Greyed strikethrough columns mean the ISP has been submitted.</p>
             </div>
@@ -889,7 +942,7 @@ tbody tr.mr-critical td{}
           <div id="instr-emergency" class="card">
             <div class="card-header"><div class="card-title">Emergency / FFA / Voter</div></div>
             <div class="card-body" style="font-size:13px;line-height:1.7;color:var(--text2);display:flex;flex-direction:column;gap:10px">
-              <p>Go to <strong>Caseload Tracker → Emergency / FFA / Voter</strong>. Click <strong>Edit</strong> to enter completion dates for each consumer.</p>
+              <p>Go to <strong>Caseload Tracker → Emergency / FFA / Voter</strong>. Click <strong>Edit</strong> to enter completion dates for each consumer. Enter a Completed Date for any section and click <strong>Save</strong> — that's the only step needed to log it.</p>
               <p>Emergency Plan, FFA (Free from Abuse), and Voter Registration all renew annually. The due date is automatically calculated as <strong>365 days after the completion date</strong>. Each of the three renews independently.</p>
               <p><strong>Voter Registration — 18+ only:</strong> Voter Registration only applies to consumers who are 18 or older. For consumers under 18, the Voter Done field is greyed out and cannot be edited. The Voter columns in the table will also be blank for these consumers. Once a consumer turns 18 (based on their Date of Birth on file), the field becomes available automatically.</p>
               <p>Dates shown in <span style="color:var(--red)">red</span> are overdue. Dates in <span style="color:#d97706">yellow/orange</span> are due within 30 days. The actual due date is shown below each status pill.</p>
@@ -915,18 +968,34 @@ tbody tr.mr-critical td{}
           <div id="instr-dashboard" class="card">
             <div class="card-header"><div class="card-title">Items Needing Attention</div></div>
             <div class="card-body" style="font-size:13px;line-height:1.7;color:var(--text2);display:flex;flex-direction:column;gap:10px">
-              <p><strong>Items Needing Attention</strong> shows everything due or in progress, grouped by category: Monitoring, PUNS, ISP, and Emergency / FFA / Voter.</p>
-              <p><strong>Two filter rows work together:</strong></p>
+              <p><strong>Items Needing Attention</strong> shows everything due or in progress, grouped by category: Monitoring, PUNS, ISP, and Emergency / FFA / Voter. It's built as a set of nested clips so you can drill from "what area" down to "how urgent" in a couple of clicks.</p>
+
+              <p><strong>Main clips</strong> — All / Monitoring / ISP / PUNS / EP-FFA-Voter. Picks which category you're looking at. Each shows a live count of how many items are in it.</p>
+
+              <p><strong>ISP</strong> splits into three clips:</p>
               <ul style="margin-left:16px;display:flex;flex-direction:column;gap:4px">
-                <li><strong>Category filter</strong> — All / Monitoring / ISP / PUNS / EP-FFA-Voter. Narrows which category group(s) are shown.</li>
-                <li><strong>Status filter</strong> — All / 🔴 Critical / Due This Month / Due Next Month. Narrows by urgency within whatever category is selected.</li>
+                <li><strong>ISP Invitation</strong> — the invite to the ISP meeting hasn't been sent yet. Has its own All / 🔴 Critical / Due This Month / Due Next Month breakdown.</li>
+                <li><strong>ISP Submit to Coach</strong> — the completed ISP hasn't been submitted yet. Same All / Critical / Due This Month / Due Next Month breakdown, independent from Invitation — a consumer can be in both at once if neither step is done.</li>
+                <li><strong>ISP Not Logged Yet</strong> — nothing has been entered for this consumer's ISP at all. No further breakdown — it's already a fully narrowed list.</li>
               </ul>
-              <p><strong>Monitoring Partial</strong> — a monitoring entry that's been started but isn't complete (missing Contact Type, Contact Date, or Tool Done Date) shows as <em>Monitoring Partial</em> and is grouped under <strong>🔴 Critical</strong> alongside truly overdue items, since it also needs the SC to finish it.</p>
-              <p><strong>PUNS</strong> — once a PUNS record has a Submitted to Coach date, it drops out of Items Needing Attention entirely. It's waiting on the state to finalize, not on the SC, so it isn't shown as a due item until the Finalized Date is updated.</p>
+
+              <p><strong>PUNS</strong> is a flat set of five clips — All / 🔴 Critical / Due This Month / Due Next Month / <strong>No PUNS Logged Yet</strong>. No PUNS Logged Yet only includes consumers age 14 and older, since PUNS isn't required before then. Once a PUNS record has a Submitted to Coach date, it drops out of here entirely — it's waiting on the state to finalize, not on the SC, so it isn't shown again until the Finalized Date is updated.</p>
+
+              <p><strong>EP / FFA / Voter</strong> splits into three clips, one per requirement:</p>
+              <ul style="margin-left:16px;display:flex;flex-direction:column;gap:4px">
+                <li><strong>Emergency Preparedness</strong></li>
+                <li><strong>FFA</strong></li>
+                <li><strong>Voter Preference</strong></li>
+              </ul>
+              <p>Each of the three has its own All / 🔴 Critical / Due This Month / Due Next Month breakdown, tracked independently — a consumer can be current on one and overdue on another.</p>
+
+              <p><strong>Monitoring Partial</strong> — a monitoring entry that's been started but isn't complete (missing Contact Type, Contact Date, or Tool Done Date) shows as <em>Monitoring Partial</em> and is grouped under 🔴 Critical alongside truly overdue items, since it also needs the SC to finish it.</p>
+
+              <p>On the Caseload Tracker, any consumer currently in <strong>ISP Not Logged Yet</strong> or <strong>No PUNS Logged Yet</strong> also has their name highlighted in light yellow on the ISP or PUNS table, so it's visible without needing to check Items Needing Attention first.</p>
+
               <p>Click <strong>Log</strong> on any alert row to open the logging modal directly. Once the requirement is met, the alert disappears automatically.</p>
               <p>Click <strong>✕</strong> to temporarily dismiss an alert. Use <strong>Restore All</strong> to bring dismissed alerts back.</p>
               <p>Use the <strong>search box</strong> at the top to narrow down alerts by consumer name or MCI#. A <strong>▾</strong> arrow on the Waiver column lets you filter alerts by waiver type. When a filter is active a <strong>⊘ Filtered ✕</strong> badge appears — click it to clear.</p>
-              <p>Alert labels show the specific type — <em>Emergency Preparedness Critical</em>, <em>FFA (Free from Abuse) Due Soon</em>, <em>Monitoring Due (every 2mo)</em> — so you always know exactly what is needed.</p>
             </div>
           </div>
 
@@ -1133,9 +1202,9 @@ tbody tr.mr-critical td{}
             <input type="text" id="f-mci" maxlength="9" placeholder="e.g. 32418 or 000032418" oninput="this.value=this.value.replace(/[^0-9]/g,'')" onblur="autopadMCI(this)">
             <span style="font-size:11px;color:var(--text3);margin-top:3px">MCI numbers are always 9 digits — shorter numbers will be padded automatically (e.g. 32418 → 000032418)</span>
           </div>
-        <div class="form-group"><label>First Name *</label><input type="text" id="f-first"></div>
-        <div class="form-group"><label>Last Name *</label><input type="text" id="f-last"></div>
-        <div class="form-group"><label>Date of Birth</label><input type="date" min="1900-01-01" max="2026-05-14" id="f-dob"></div>
+        <div class="form-group"><label>First Name *</label><input type="text" id="f-first" onblur="this.value=toProperCase(this.value)"></div>
+        <div class="form-group"><label>Last Name *</label><input type="text" id="f-last" onblur="this.value=toProperCase(this.value)"></div>
+        <div class="form-group"><label>Date of Birth *</label><input type="date" min="1900-01-01" id="f-dob"></div>
         <div class="form-group"><label>Waiver Type *</label>
           <select id="f-waiver">
             <option value="">-- Select --</option>
@@ -1155,6 +1224,7 @@ tbody tr.mr-critical td{}
         <div class="form-group full"><label>Comments / Notes</label><textarea id="f-comments" rows="3" placeholder="Optional notes about this consumer…"></textarea></div>
 
         <div class="form-group"><label>Date Started with Me as SC</label><input type="date" min="1900-01-01" max="2500-12-31" id="f-started"></div>
+        <div class="form-group"><label>Date of Opening</label><input type="date" min="1900-01-01" max="2500-12-31" id="f-opened"></div>
       </div>
     </div>
     <div class="modal-footer" style="flex-direction:column;gap:0;padding:0">
@@ -1332,7 +1402,7 @@ tbody tr.mr-critical td{}
           </select>
         </div>
         <div class="form-group"><label>Contact Date</label><input type="date" min="1900-01-01" max="2500-12-31" id="mon-dt"></div>
-        <div class="form-group"><label>Tool Completed (HCSIS)</label><input type="date" min="1900-01-01" max="2500-12-31" id="mon-dn"></div>
+        <div class="form-group"><label>Tool Completed</label><input type="date" min="1900-01-01" max="2500-12-31" id="mon-dn"></div>
       </div>
     </div>
     <div class="modal-footer">
@@ -1404,11 +1474,10 @@ tbody tr.mr-critical td{}
           <strong style="font-size:13px">Emergency (EP)</strong>
         </div>
         <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:10px 12px;margin-bottom:10px;font-size:12px" id="em-status-emerg"></div>
-        <div class="form-grid" style="grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+        <div class="form-grid" style="grid-template-columns:1fr 1fr;gap:8px">
           <div class="form-group"><label>Completed Date</label><input type="date" id="em-new-emerg" min="1900-01-01" max="2500-12-31" oninput="updateEmergNextDue('emerg')"></div>
           <div class="form-group"><label>Next Due <span style="font-size:10px;color:var(--text3)">(auto)</span></label><input type="text" id="em-nextdue-emerg" readonly style="background:var(--surface2);color:var(--text3)"></div>
         </div>
-        <button type="button" class="btn btn-sm btn-neutral" onclick="addEmergEntry('emerg')" style="margin-bottom:4px">+ Log Completed</button>
       </div>
 
       <hr style="border:none;border-top:1px solid var(--border);margin:10px 0 14px">
@@ -1419,11 +1488,10 @@ tbody tr.mr-critical td{}
           <strong style="font-size:13px">Free From Abuse (FFA)</strong>
         </div>
         <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:10px 12px;margin-bottom:10px;font-size:12px" id="em-status-ffa"></div>
-        <div class="form-grid" style="grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+        <div class="form-grid" style="grid-template-columns:1fr 1fr;gap:8px">
           <div class="form-group"><label>Completed Date</label><input type="date" id="em-new-ffa" min="1900-01-01" max="2500-12-31" oninput="updateEmergNextDue('ffa')"></div>
           <div class="form-group"><label>Next Due <span style="font-size:10px;color:var(--text3)">(auto)</span></label><input type="text" id="em-nextdue-ffa" readonly style="background:var(--surface2);color:var(--text3)"></div>
         </div>
-        <button type="button" class="btn btn-sm btn-neutral" onclick="addEmergEntry('ffa')" style="margin-bottom:4px">+ Log Completed</button>
       </div>
 
       <hr style="border:none;border-top:1px solid var(--border);margin:10px 0 14px">
@@ -1434,11 +1502,10 @@ tbody tr.mr-critical td{}
           <strong style="font-size:13px" id="em-voter-label">Voter Registration</strong>
         </div>
         <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:10px 12px;margin-bottom:10px;font-size:12px" id="em-status-voter"></div>
-        <div class="form-grid" style="grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+        <div class="form-grid" style="grid-template-columns:1fr 1fr;gap:8px">
           <div class="form-group"><label>Completed Date</label><input type="date" id="em-new-voter" min="1900-01-01" max="2500-12-31" oninput="updateEmergNextDue('voter')"></div>
           <div class="form-group"><label>Next Due <span style="font-size:10px;color:var(--text3)">(auto)</span></label><input type="text" id="em-nextdue-voter" readonly style="background:var(--surface2);color:var(--text3)"></div>
         </div>
-        <button type="button" id="em-voter-add-btn" class="btn btn-sm btn-neutral" onclick="addEmergEntry('voter')" style="margin-bottom:4px">+ Log Completed</button>
       </div>
 
       <hr style="border:none;border-top:1px solid var(--border);margin:4px 0 14px">
@@ -1837,6 +1904,13 @@ function auditSummary(oldObj, newObj, fields) {
 function save() {
   S.meta = S.meta || {};
   S.meta.lastSaveAt = new Date().toISOString();
+  // The empty-caseload notice was only ever checked once at launch — if it's
+  // showing and a consumer has since been added (imported or manual), clear
+  // it now rather than leaving it up claiming the caseload is empty when
+  // it no longer is.
+  if (_notifs['empty-caseload'] && S.clients.length > 0) {
+    dismissNotif('empty-caseload');
+  }
   if (window.electronAPI) {
     window.electronAPI.saveData(S);
     window.electronAPI.markUnsaved();
@@ -2199,6 +2273,16 @@ function onSearchInput(inputId) {
 }
 
 const age      = dob => { if(!dob) return ''; const d=pd(dob),t=today(); if(d>t) return '—'; let a=t.getFullYear()-d.getFullYear(); if(t.getMonth()<d.getMonth()||(t.getMonth()===d.getMonth()&&t.getDate()<d.getDate())) a--; return a; };
+
+// Auto-formats a typed/pasted name into Title Case — "abigail" -> "Abigail",
+// "mary-jane" -> "Mary-Jane", "o'brien" -> "O'Brien". Like Excel's PROPER(),
+// this can't distinguish real internal-capital surnames (McDonald, MacArthur,
+// LaFontaine) from ordinary ones, so those still need a manual touch-up after
+// auto-formatting — a known, accepted trade-off of this kind of normalization.
+function toProperCase(str) {
+  if (!str) return str;
+  return str.trim().toLowerCase().replace(/(^|[\s\-'])([a-z])/g, (m, sep, ch) => sep + ch.toUpperCase());
+}
 const padMCI   = v => String(v||'').padStart(9,'0').slice(-9);
 
 function statusPill(date, urgDays=30) {
@@ -2332,19 +2416,67 @@ function getLastMon(mci) {
   return max;
 }
 
-function getNextDue(mci) {
+// Same as getLastMon, but ignores any contact logged BEFORE the given date —
+// used to make sure a stale entry from a prior, unrelated episode of care
+// (e.g. before a consumer closed and later reopened) doesn't get treated as
+// satisfying the monitoring requirement for THIS opening.
+function getLastMonSince(mci, sinceDate) {
+  const mon = S.monitoring[mci] || {};
+  let max = null;
+  Object.values(mon).forEach(m => {
+    if (!m?.dt) return;
+    const d = pd(m.dt);
+    if (d && d >= sinceDate && (!max || d > max)) max = d;
+  });
+  return max;
+}
+
+// Computes the cadence "anchor" month a client's monitoring is due against —
+// shared by getNextDue() and clientMonStatus() so both stay consistent.
+// Two paths:
+//  1. Normal ongoing cadence — anchored to the most recent logged contact
+//     date + the waiver's frequency. Reflects the client's CURRENT waiver,
+//     so a waiver change is picked up automatically on the very next call —
+//     no separate "waiver changed" logic needed.
+//  2. New-opening rule (Base / SC Services Only only) — when nothing has
+//     been logged SINCE the Date of Opening, anchors to Date of Opening + 6
+//     months. These two waivers only require annual monitoring, so without
+//     this a brand-new opening could otherwise go 12 months with no due-date
+//     nudge at all — and a stale contact from before this opening (e.g. a
+//     prior, unrelated episode of care) is deliberately not enough to
+//     satisfy it, so Date of Opening keeps working correctly no matter when
+//     it's added relative to older monitoring history already on file.
+//     Other waiver types (actual HCBS waivers) keep today's behavior: no
+//     due date shows until their first monitoring contact is logged.
+// Returns { dueMonth: Date (1st of month), source: 'cadence'|'newOpening' } or null.
+function getMonitoringAnchor(mci) {
   const c = S.clients.find(x => x.mci === mci);
   if (!c) return null;
-
   const freq = WAIVERS[c.waiver] || 0;
   if (!freq) return null; // Not Applicable waivers
 
-  const last = getLastMon(mci);
-  if (!last) return null; // blank until first real monitoring exists
+  const isNewOpeningWaiver = c.waiver === 'Base' || c.waiver === 'SC Services Only';
+  const opened = c.dateOpened ? pd(c.dateOpened) : null;
 
-  const due = new Date(last);
-  due.setMonth(due.getMonth() + freq);
-  return due;
+  const last = (isNewOpeningWaiver && opened) ? getLastMonSince(mci, opened) : getLastMon(mci);
+  if (last) {
+    return { dueMonth: new Date(last.getFullYear(), last.getMonth() + freq, 1), source: 'cadence' };
+  }
+
+  if (isNewOpeningWaiver && opened) {
+    return { dueMonth: new Date(opened.getFullYear(), opened.getMonth() + 6, 1), source: 'newOpening' };
+  }
+  return null; // blank until first real monitoring exists (or no Date of Opening on file)
+}
+
+function getNextDue(mci) {
+  const c = S.clients.find(x => x.mci === mci);
+  if (!c) return null;
+  const freq = WAIVERS[c.waiver] || 0;
+  if (!freq) return null; // Not Applicable waivers
+
+  const anchor = getMonitoringAnchor(mci);
+  return anchor ? anchor.dueMonth : null;
 }
 
 function clientMonStatus(mci, year, month) {
@@ -2371,11 +2503,9 @@ function clientMonStatus(mci, year, month) {
     return 'pending_type';
   }
 
-  const last = getLastMon(mci);
-  if (!last) return 'none'; // waiver requires monitoring but none logged yet
-
-  // cadence rolls from most recent actual monitoring
-  const dueMonth = new Date(last.getFullYear(), last.getMonth() + freq, 1);
+  const anchor = getMonitoringAnchor(mci);
+  if (!anchor) return 'none'; // waiver requires monitoring but none logged yet (and no new-opening anchor available)
+  const dueMonth = anchor.dueMonth;
 
   // exact due month
   if (sameMonth(targetMonth, dueMonth)) {
@@ -2402,6 +2532,7 @@ function ispCalc(isp) {
   const ar=pd(isp?.annual); if(!ar) return {};
   return {
     start:    addDays(ar,-120),
+    scheduleTarget: addDays(ar,-90), // midpoint of Start/Last ISP — suggested date to have the meeting scheduled by
     lastISP:  addDays(ar,-60),
     inviteDue:isp?.scheduled?addDays(pd(isp.scheduled),-30):null,
     submitBy: addDays(ar,-50)
@@ -2412,6 +2543,13 @@ function ispCalc(isp) {
 // NAV
 // ================================================================
 function showSec(name, btn) {
+  const current = document.querySelector('.section.active')?.id.replace('sec-','');
+  // Leaving Import Caseload with a review in progress now fully cancels it
+  // rather than preserving it in the background — matches how every other
+  // in-progress form in this app behaves when you navigate away.
+  if (current === 'csvImport' && name !== 'csvImport' && _csvImportRows.length > 0) {
+    csvImportChooseAnother();
+  }
   document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));
   document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
   document.getElementById(`sec-${name}`).classList.add('active');
@@ -2426,6 +2564,7 @@ function render() {
     caseload: renderCaseload,
     caseloadTracker: renderCaseloadTracker,
     abTracker: renderABTracker,
+    csvImport: renderCsvImportSection,
     instructions: () => {} // static HTML, no init needed
   };
   if(map[a]) map[a]();
@@ -2459,8 +2598,6 @@ function renderDashboard() {
   let ispA = 0, punsA = 0, emergA = 0;
   let abMet = 0, abProg = 0, abMiss = 0, abNA = 0;
   let alerts = [];
-
-  const alertFilter = window._dashFilter || 'all';
 
   S.clients.filter(c => c.status === 'Active').forEach(c => {
    try {
@@ -2533,52 +2670,121 @@ function renderDashboard() {
     }
 
     // PUNS
-    // Once "Submitted to Coach" is set, the due date is no longer a live deadline for
-    // the SC — the next action is updating the Finalized Date once the state responds,
-    // not chasing an "overdue" due date. So it's excluded here entirely. The underlying
-    // due-date math (punsDue) is untouched — the Coach app still needs it — this only
-    // controls what surfaces in Items Needing Attention.
     const puns = S.puns[c.mci];
-    const punsDate = puns?.submitted ? null : punsDue(puns);
-    if (punsDate) {
-      const days = diffDays(punsDate, t);
-      const bucket = generalDueBucket(punsDate);
-
-      if (days < 0) {
-        punsA++;
+    if (!puns?.category) {
+      // No PUNS Logged — only tracked for consumers who actually need one (14+)
+      const a = age(c.dob);
+      if (typeof a === 'number' && a >= 14) {
         alerts.push({
           c,
-          issue: 'PUNS Critical',
+          issue: 'No PUNS Logged Yet',
           cat: 'PUNS',
-          detail: `Was due by ${fd(punsDate)}`,
+          detail: `Age ${a} — no PUNS category has been entered yet`,
+          s: 'overdue',
+          bucket: 'overdue'
+        });
+      }
+    } else {
+      // Once "Submitted to Coach" is set, the due date is no longer a live deadline for
+      // the SC — the next action is updating the Finalized Date once the state responds,
+      // not chasing an "overdue" due date. So it's excluded here entirely. The underlying
+      // due-date math (punsDue) is untouched — the Coach app still needs it — this only
+      // controls what surfaces in Items Needing Attention.
+      const punsDate = puns?.submitted ? null : punsDue(puns);
+      if (punsDate) {
+        const days = diffDays(punsDate, t);
+        const bucket = generalDueBucket(punsDate);
+
+        if (days < 0) {
+          punsA++;
+          alerts.push({
+            c,
+            issue: 'PUNS Critical',
+            cat: 'PUNS',
+            detail: `Was due by ${fd(punsDate)}`,
+            s: 'overdue',
+            bucket: 'overdue'
+          });
+        } else if (days <= 30) {
+          punsA++;
+          alerts.push({
+            c,
+            issue: 'PUNS Due Soon',
+            cat: 'PUNS',
+            detail: `Due ${fd(punsDate)} (${days}d)`,
+            s: 'warn',
+            bucket
+          });
+        } else if (bucket === 'due_this_month' || bucket === 'due_next_month') {
+          alerts.push({
+            c,
+            issue: bucket === 'due_this_month' ? 'PUNS Due This Month' : 'PUNS Due Next Month',
+            cat: 'PUNS',
+            detail: `Due ${fd(punsDate)}`,
+            s: 'info',
+            bucket
+          });
+        }
+      }
+    }
+
+    // ISP
+    const isp = S.isp[c.mci];
+    if (!isp?.annual) {
+      // ISP Not Logged Yet — nothing has ever been entered for this consumer's ISP
+      alerts.push({
+        c,
+        issue: 'ISP Not Logged Yet',
+        cat: 'ISP',
+        subtype: 'notlogged',
+        detail: 'No ISP has been logged for this consumer yet',
+        s: 'overdue',
+        bucket: 'overdue'
+      });
+    } else {
+    const calc = ispCalc(isp);
+
+    // ISP Invitation
+    if (calc.inviteDue && !isp?.invite) {
+      const days = diffDays(calc.inviteDue, t);
+      const bucket = generalDueBucket(calc.inviteDue);
+
+      if (days < 0) {
+        ispA++;
+        alerts.push({
+          c,
+          issue: 'ISP Invitation Critical',
+          cat: 'ISP',
+          subtype: 'invite',
+          detail: `Invite was due by ${fd(calc.inviteDue)}`,
           s: 'overdue',
           bucket: 'overdue'
         });
       } else if (days <= 30) {
-        punsA++;
+        ispA++;
         alerts.push({
           c,
-          issue: 'PUNS Due Soon',
-          cat: 'PUNS',
-          detail: `Due ${fd(punsDate)} (${days}d)`,
+          issue: 'ISP Invitation Due Soon',
+          cat: 'ISP',
+          subtype: 'invite',
+          detail: `Invite due ${fd(calc.inviteDue)} (${days}d)`,
           s: 'warn',
           bucket
         });
       } else if (bucket === 'due_this_month' || bucket === 'due_next_month') {
         alerts.push({
           c,
-          issue: bucket === 'due_this_month' ? 'PUNS Due This Month' : 'PUNS Due Next Month',
-          cat: 'PUNS',
-          detail: `Due ${fd(punsDate)}`,
+          issue: bucket === 'due_this_month' ? 'ISP Invitation Due This Month' : 'ISP Invitation Due Next Month',
+          cat: 'ISP',
+          subtype: 'invite',
+          detail: `Invite due ${fd(calc.inviteDue)}`,
           s: 'info',
           bucket
         });
       }
     }
 
-    // ISP
-    const isp = S.isp[c.mci];
-    const calc = ispCalc(isp);
+    // ISP Submit to Coach
     if (calc.submitBy && !isp?.submitted) {
       const days = diffDays(calc.submitBy, t);
       const bucket = generalDueBucket(calc.submitBy);
@@ -2587,8 +2793,9 @@ function renderDashboard() {
         ispA++;
         alerts.push({
           c,
-          issue: 'ISP Submission Critical',
+          issue: 'ISP Submit to Coach Critical',
           cat: 'ISP',
+          subtype: 'submit',
           detail: `Was due by ${fd(calc.submitBy)}`,
           s: 'overdue',
           bucket: 'overdue'
@@ -2597,8 +2804,9 @@ function renderDashboard() {
         ispA++;
         alerts.push({
           c,
-          issue: 'ISP Submission Due Soon',
+          issue: 'ISP Submit to Coach Due Soon',
           cat: 'ISP',
+          subtype: 'submit',
           detail: `Due ${fd(calc.submitBy)} (${days}d)`,
           s: 'warn',
           bucket
@@ -2606,13 +2814,15 @@ function renderDashboard() {
       } else if (bucket === 'due_this_month' || bucket === 'due_next_month') {
         alerts.push({
           c,
-          issue: bucket === 'due_this_month' ? 'ISP Due This Month' : 'ISP Due Next Month',
+          issue: bucket === 'due_this_month' ? 'ISP Submit to Coach Due This Month' : 'ISP Submit to Coach Due Next Month',
           cat: 'ISP',
+          subtype: 'submit',
           detail: `Due ${fd(calc.submitBy)}`,
           s: 'info',
           bucket
         });
       }
+    }
     }
 
     // Emergency / FFA / Voter
@@ -2620,8 +2830,8 @@ function renderDashboard() {
     if (emerg) {
       [
         ['emerg', 'Emergency Preparedness'],
-        ['ffa', 'FFA (Free from Abuse)'],
-        ['voter', 'Voter Registration']
+        ['ffa', 'FFA'],
+        ['voter', 'Voter Preference']
       ].forEach(([field, label]) => {
         if (!emerg[field]) return;
 
@@ -2635,6 +2845,7 @@ function renderDashboard() {
             c,
             issue: `${label} Critical`,
             cat: 'Emergency',
+            subtype: field,
             detail: `Was due by ${fd(due)}`,
             s: 'overdue',
             bucket: 'overdue'
@@ -2645,6 +2856,7 @@ function renderDashboard() {
             c,
             issue: `${label} Due Soon`,
             cat: 'Emergency',
+            subtype: field,
             detail: `Due ${fd(due)} (${days}d)`,
             s: 'warn',
             bucket
@@ -2654,6 +2866,7 @@ function renderDashboard() {
             c,
             issue: bucket === 'due_this_month' ? `${label} Due This Month` : `${label} Due Next Month`,
             cat: 'Emergency',
+            subtype: field,
             detail: `Due ${fd(due)}`,
             s: 'info',
             bucket
@@ -2674,40 +2887,105 @@ function renderDashboard() {
    }
   });
 
-  if (alertFilter !== 'all') {
-    alerts = alertFilter === 'overdue'
-      ? alerts.filter(a => a.s === 'overdue')
-      : alerts.filter(a => a.bucket === alertFilter);
-  }
-  const dashCategory = window._dashCategory || 'all';
-  if (dashCategory !== 'all') {
-    const CAT_MAP = { mon:'Monitoring', isp:'ISP', puns:'PUNS', emerg:'Emergency' };
-    alerts = alerts.filter(a => a.cat === CAT_MAP[dashCategory]);
-  }
+  // Filter out dismissed alerts, then the filters that apply globally
+  // regardless of category (waiver / status / search) — these run before
+  // count computation so every clip's count reflects what's actually
+  // reachable, not a stale total.
+  let visible = alerts.filter(a => !_dismissedAlerts.has(alertKey(a)));
   const dashWaiver = colFilters.dashboard.waiver;
   const dashQ = (document.getElementById('dash-search')?.value || '').toLowerCase();
   const dashStatus = colFilters.dashboard.status;
-  if (dashWaiver) alerts = alerts.filter(a => a.c.waiver === dashWaiver);
-  if (dashStatus) alerts = alerts.filter(a => (a.s==='overdue'?'Critical':a.s==='warn'?'Due Soon':'Upcoming') === dashStatus);
-  if (dashQ) alerts = alerts.filter(a => (a.c.last+' '+a.c.first+' '+a.c.mci).toLowerCase().includes(dashQ));
+  if (dashWaiver) visible = visible.filter(a => a.c.waiver === dashWaiver);
+  if (dashStatus) visible = visible.filter(a => (a.s==='overdue'?'Critical':a.s==='warn'?'Due Soon':'Upcoming') === dashStatus);
+  if (dashQ) visible = visible.filter(a => (a.c.last+' '+a.c.first+' '+a.c.mci).toLowerCase().includes(dashQ));
 
   document.getElementById('stat-cards').innerHTML = ''; // stat cards disabled
   updateCfBtnStates('dashboard');
   updateCfBadge('dashboard');
 
-  if (cfAutoClearIfEmpty('dashboard', alerts, S.clients.filter(c=>c.status==='Active').length)) return;
+  if (cfAutoClearIfEmpty('dashboard', visible, S.clients.filter(c=>c.status==='Active').length)) return;
+
+  // ── Category -> Subtype -> Period, with counts computed at each tier ──
+  // Category: which main area (All / Monitoring / ISP / PUNS / Emergency).
+  // Subtype: ISP only (Invitation / Submit to Coach / Not Logged Yet) and
+  //   Emergency only (Emergency Preparedness / FFA / Voter Preference).
+  // Period: All / Critical / Due This Month / Due Next Month — nested under
+  //   ISP Invitation, ISP Submit to Coach, each Emergency subtype, Monitoring,
+  //   and the top-level All view. PUNS has no subtype layer — its period row
+  //   includes "No PUNS Logged Yet" as a fifth peer option instead. ISP's
+  //   "Not Logged Yet" subtype has no period breakdown at all — it's already
+  //   a fully narrowed list on its own.
+  const dashCategory = window._dashCategory || 'all';
+  const dashSubType  = window._dashSubType  || 'all';
+  const dashPeriod   = window._dashFilter   || 'all';
+  const CAT_MAP = { mon:'Monitoring', isp:'ISP', puns:'PUNS', emerg:'Emergency' };
+
+  const catCounts = {
+    all:   visible.length,
+    mon:   visible.filter(a=>a.cat==='Monitoring').length,
+    isp:   visible.filter(a=>a.cat==='ISP').length,
+    puns:  visible.filter(a=>a.cat==='PUNS').length,
+    emerg: visible.filter(a=>a.cat==='Emergency').length,
+  };
+
+  let catScoped = dashCategory === 'all' ? visible : visible.filter(a => a.cat === CAT_MAP[dashCategory]);
+
+  let subCounts = {};
+  if (dashCategory === 'isp') {
+    subCounts = {
+      all:       catScoped.length,
+      invite:    catScoped.filter(a=>a.subtype==='invite').length,
+      submit:    catScoped.filter(a=>a.subtype==='submit').length,
+      notlogged: catScoped.filter(a=>a.subtype==='notlogged').length,
+    };
+  } else if (dashCategory === 'emerg') {
+    subCounts = {
+      all:   catScoped.length,
+      emerg: catScoped.filter(a=>a.subtype==='emerg').length,
+      ffa:   catScoped.filter(a=>a.subtype==='ffa').length,
+      voter: catScoped.filter(a=>a.subtype==='voter').length,
+    };
+  }
+
+  const subScoped = ((dashCategory==='isp' || dashCategory==='emerg') && dashSubType !== 'all')
+    ? catScoped.filter(a => a.subtype === dashSubType)
+    : catScoped;
+
+  const periodCounts = {
+    all: subScoped.length,
+    overdue: subScoped.filter(a=>a.s==='overdue').length,
+    due_this_month: subScoped.filter(a=>a.bucket==='due_this_month').length,
+    due_next_month: subScoped.filter(a=>a.bucket==='due_next_month').length,
+  };
+  if (dashCategory === 'puns') {
+    periodCounts.no_puns_logged = subScoped.filter(a=>a.issue==='No PUNS Logged Yet').length;
+  }
+
+  const skipPeriod = (dashCategory === 'isp' && dashSubType === 'notlogged');
+  let finalAlerts;
+  if (skipPeriod) {
+    finalAlerts = subScoped;
+  } else if (dashPeriod === 'no_puns_logged') {
+    finalAlerts = subScoped.filter(a => a.issue === 'No PUNS Logged Yet');
+  } else if (dashPeriod !== 'all') {
+    finalAlerts = dashPeriod === 'overdue'
+      ? subScoped.filter(a => a.s === 'overdue')
+      : subScoped.filter(a => a.bucket === dashPeriod);
+  } else {
+    finalAlerts = subScoped;
+  }
+
+  renderDashClipBar(catCounts, subCounts, periodCounts);
+
   const container = document.getElementById('alerts-groups');
-  if (!alerts.length) {
-    const _dashHasF = dashWaiver || dashStatus || dashQ || dashCategory !== 'all';
+  if (!finalAlerts.length) {
+    const _dashHasF = dashWaiver || dashStatus || dashQ || dashCategory !== 'all' || dashSubType !== 'all' || dashPeriod !== 'all';
     container.innerHTML = _dashHasF
       ? '<div style="text-align:center;padding:40px 24px;color:var(--text3);background:var(--surface);border-radius:var(--radius);border:1px solid var(--border)">🔍 <strong>No Results Found</strong><p style="font-size:12px;margin-top:4px">Try adjusting your search or filters.</p></div>'
       : '<div style="text-align:center;padding:40px 24px;color:var(--text3);background:var(--surface);border-radius:var(--radius);border:1px solid var(--border)">✅ No items need attention right now</div>';
     updateRestoreBar();
     return;
   }
-
-  // Filter out dismissed alerts
-  const visible = alerts.filter(a => !_dismissedAlerts.has(alertKey(a)));
 
   const GROUPS = [
     { cat:'Monitoring', icon:'📅', label:'Monitoring' },
@@ -2718,7 +2996,7 @@ function renderDashboard() {
   const orderMap = { overdue:0, warn:1, info:2 };
 
   container.innerHTML = GROUPS.map(g => {
-    let rows = visible
+    let rows = finalAlerts
       .filter(a => a.cat === g.cat)
       .sort((a,b) => (orderMap[a.s]??9) - (orderMap[b.s]??9));
     // Apply name/MCI sort if set
@@ -3024,11 +3302,15 @@ function renderMonTable() {
     const entry=getMonEntry(c.mci,monYear,monMonth)||{};
     const meta=META[s]||META.na;
     const next=getNextDue(c.mci);
+    const anchor=getMonitoringAnchor(c.mci);
+    const freqLabel = anchor?.source==='newOpening'
+      ? 'New Opening — 1st due ≤6mo'
+      : (WAIVERS[c.waiver]?`Every ${WAIVERS[c.waiver]}mo`:'Not Applicable');
     return `<tr class="${meta.row}">
       <td><strong>${escapeHtml(c.last)}, ${escapeHtml(c.first)}</strong><br><span style="font-size:10px;color:var(--text3)">Next: ${next?fmy(next):'—'}</span></td>
       <td class="date-cell">${padMCI(c.mci)}</td>
       <td><span class="pill pill-blue" style="font-size:10px">${c.waiver||'—'}</span></td>
-      <td style="font-size:11px;color:var(--text3)">${WAIVERS[c.waiver]?`Every ${WAIVERS[c.waiver]}mo`:'Not Applicable'}</td>
+      <td style="font-size:11px;color:var(--text3)">${freqLabel}</td>
       <td><span class="pill ${meta.pill}">${meta.label}</span></td>
       <td>${entry.con?`<span class="pill pill-blue" style="font-size:11px" title="${CTYPES[entry.con]||''}">${entry.con}</span>`:'—'}</td>
       <td class="date-cell">${entry.dt?fd(entry.dt):'—'}</td>
@@ -3044,22 +3326,86 @@ function renderMonTable() {
   }finally{_rendering.monitoring=false;}
 }
 
-function setDashFilter(f, btn) {
-  window._dashFilter = f;
-  document.querySelectorAll('#dash-filter-bar .dash-ftab').forEach(b => b.classList.remove('active'));
-  btn.classList.add('active');
-  // Auto-expand all groups when a filter is selected
-  if (f !== 'all') expandAll();
-  renderDashboard();
+// Builds the Items Needing Attention clip bar: main category row, then (for
+// ISP/Emergency) a subtype row, then a period row — shown/hidden/relabeled
+// based on current selection. Called fresh from renderDashboard() each time,
+// so it always reflects live counts and never goes stale.
+function renderDashClipBar(catCounts, subCounts, periodCounts) {
+  const bar = document.getElementById('dash-clip-bar');
+  if (!bar) return;
+  const dashCategory = window._dashCategory || 'all';
+  const dashSubType  = window._dashSubType  || 'all';
+  const dashPeriod   = window._dashFilter   || 'all';
+
+  const cbadge = n => n ? ` <span style="background:rgba(0,0,0,.12);border-radius:99px;padding:0 5px;font-size:10px">${n}</span>` : '';
+  const btn = (active, onclick, label, count) =>
+    `<button type="button" class="dash-ftab${active?' active':''}" onclick="${onclick}">${label}${cbadge(count)}</button>`;
+
+  const mainRow = `<div class="dash-filter-bar" style="margin-bottom:0">
+    ${btn(dashCategory==='all',   "setDashCategory('all')",   'All', catCounts.all)}
+    ${btn(dashCategory==='mon',   "setDashCategory('mon')",   'Monitoring', catCounts.mon)}
+    ${btn(dashCategory==='isp',   "setDashCategory('isp')",   'ISP', catCounts.isp)}
+    ${btn(dashCategory==='puns',  "setDashCategory('puns')",  'PUNS', catCounts.puns)}
+    ${btn(dashCategory==='emerg', "setDashCategory('emerg')", 'EP / FFA / Voter', catCounts.emerg)}
+  </div>`;
+
+  let subRow = '';
+  if (dashCategory === 'isp') {
+    subRow = `<div class="dash-filter-bar" style="margin-bottom:0;margin-top:8px">
+      ${btn(dashSubType==='all',       "setDashSubType('all')",       'All', subCounts.all)}
+      ${btn(dashSubType==='invite',    "setDashSubType('invite')",    'ISP Invitation', subCounts.invite)}
+      ${btn(dashSubType==='submit',    "setDashSubType('submit')",    'ISP Submit to Coach', subCounts.submit)}
+      ${btn(dashSubType==='notlogged', "setDashSubType('notlogged')", 'ISP Not Logged Yet', subCounts.notlogged)}
+    </div>`;
+  } else if (dashCategory === 'emerg') {
+    subRow = `<div class="dash-filter-bar" style="margin-bottom:0;margin-top:8px">
+      ${btn(dashSubType==='all',   "setDashSubType('all')",   'All', subCounts.all)}
+      ${btn(dashSubType==='emerg', "setDashSubType('emerg')", 'Emergency Preparedness', subCounts.emerg)}
+      ${btn(dashSubType==='ffa',   "setDashSubType('ffa')",   'FFA', subCounts.ffa)}
+      ${btn(dashSubType==='voter', "setDashSubType('voter')", 'Voter Preference', subCounts.voter)}
+    </div>`;
+  }
+
+  let periodRow = '';
+  const skipPeriod = (dashCategory === 'isp' && dashSubType === 'notlogged');
+  if (!skipPeriod) {
+    if (dashCategory === 'puns') {
+      periodRow = `<div class="dash-filter-bar" style="margin-bottom:0;margin-top:8px">
+        ${btn(dashPeriod==='all',            "setDashFilter('all')",            'All', periodCounts.all)}
+        ${btn(dashPeriod==='overdue',        "setDashFilter('overdue')",        '🔴 Critical', periodCounts.overdue)}
+        ${btn(dashPeriod==='due_this_month', "setDashFilter('due_this_month')", 'Due This Month', periodCounts.due_this_month)}
+        ${btn(dashPeriod==='due_next_month', "setDashFilter('due_next_month')", 'Due Next Month', periodCounts.due_next_month)}
+        ${btn(dashPeriod==='no_puns_logged', "setDashFilter('no_puns_logged')", 'No PUNS Logged Yet', periodCounts.no_puns_logged)}
+      </div>`;
+    } else {
+      periodRow = `<div class="dash-filter-bar" style="margin-bottom:0;margin-top:8px">
+        ${btn(dashPeriod==='all',            "setDashFilter('all')",            'All', periodCounts.all)}
+        ${btn(dashPeriod==='overdue',        "setDashFilter('overdue')",        '🔴 Critical', periodCounts.overdue)}
+        ${btn(dashPeriod==='due_this_month', "setDashFilter('due_this_month')", 'Due This Month', periodCounts.due_this_month)}
+        ${btn(dashPeriod==='due_next_month', "setDashFilter('due_next_month')", 'Due Next Month', periodCounts.due_next_month)}
+      </div>`;
+    }
+  }
+
+  bar.innerHTML = mainRow + subRow + periodRow;
 }
 
-function setDashCategory(cat, btn) {
+function setDashFilter(f) {
+  window._dashFilter = f;
+  if (f !== 'all') expandAll(); else renderDashboard();
+}
+
+function setDashCategory(cat) {
   window._dashCategory = cat;
-  document.querySelectorAll('#dash-cat-bar .dash-ftab').forEach(b => b.classList.remove('active'));
-  btn.classList.add('active');
-  // Auto-expand all groups when narrowing to a specific category
-  if (cat !== 'all') expandAll();
-  renderDashboard();
+  window._dashSubType = 'all';
+  window._dashFilter = 'all';
+  if (cat !== 'all') expandAll(); else renderDashboard();
+}
+
+function setDashSubType(sub) {
+  window._dashSubType = sub;
+  window._dashFilter = 'all';
+  if (sub !== 'all') expandAll(); else renderDashboard();
 }
 
 function setDashWaiver() {
@@ -3153,6 +3499,7 @@ function renderISP(){
     return {
       client:x.client, mci:x.mci, waiver:x.waiver||'', annual:x.annual,
       start:     calc.start?calc.start.toISOString():'',
+      scheduleTarget: calc.scheduleTarget?calc.scheduleTarget.toISOString():'',
       lastIsp:   calc.lastISP?calc.lastISP.toISOString():'',
       scheduled: isp.scheduled||'',
       inviteDue: calc.inviteDue?calc.inviteDue.toISOString():'',
@@ -3163,11 +3510,11 @@ function renderISP(){
       variance:  isp.variance||''
     };
   });
-  updateSortIndicators('isp', ['client','mci','waiver','annual','start','lastIsp','scheduled','inviteDue','invite','submitBy','submitted','status','variance']);
+  updateSortIndicators('isp', ['client','mci','waiver','annual','start','scheduleTarget','lastIsp','scheduled','inviteDue','invite','submitBy','submitted','status','variance']);
   const _ispBase = S.clients.filter(c=>c.status==='Active');
   if (cfAutoClearIfEmpty('isp', clients, _ispBase.length)) return;
   const ispTotal=_ispBase.length; const ispCountEl=document.getElementById('isp-count'); if(ispCountEl) ispCountEl.textContent='';
-  if(!clients.length){tbody.innerHTML=_ispBase.length===0?'<tr><td colspan="14" style="text-align:center;padding:32px;color:var(--text3)"><strong>No active consumers</strong><div style="font-size:11px;margin-top:4px;opacity:.7">Add consumers or check the Inactive view</div></td></tr>':'<tr><td colspan="14" style="text-align:center;padding:32px;color:var(--text3)"><strong>No consumers found</strong><div style="font-size:11px;margin-top:4px;opacity:.7">Try adjusting your search or filters</div></td></tr>';document.getElementById('pg-isp').innerHTML='';return;}
+  if(!clients.length){tbody.innerHTML=_ispBase.length===0?'<tr><td colspan="15" style="text-align:center;padding:32px;color:var(--text3)"><strong>No active consumers</strong><div style="font-size:11px;margin-top:4px;opacity:.7">Add consumers or check the Inactive view</div></td></tr>':'<tr><td colspan="15" style="text-align:center;padding:32px;color:var(--text3)"><strong>No consumers found</strong><div style="font-size:11px;margin-top:4px;opacity:.7">Try adjusting your search or filters</div></td></tr>';document.getElementById('pg-isp').innerHTML='';return;}
   function dc(d, done, greyed, noColor=false){
     if(!d) return `<td style="color:var(--text3)">—</td>`;
     if(greyed) return `<td class="date-cell" style="color:var(--text3);text-decoration:line-through" title="ISP submitted">${fd(d)}</td>`;
@@ -3180,11 +3527,11 @@ function renderISP(){
     const isp=S.isp[c.mci]||{},calc=ispCalc(isp);
     const submitted = !!isp.submitted; // once submitted, grey out deadline columns
     return `<tr${submitted?' style="opacity:.75"':''}>
-      <td><strong>${escapeHtml(c.last)}, ${escapeHtml(c.first)}</strong></td>
+      <td${!isp.annual?' style="background:var(--yellow-light)"':''}><strong>${escapeHtml(c.last)}, ${escapeHtml(c.first)}</strong></td>
       <td class="date-cell">${padMCI(c.mci)}</td>
       <td><span class="pill pill-blue" style="font-size:10px">${c.waiver||'—'}</span></td>
       <td class="date-cell">${isp.annual?fd(isp.annual):'—'}</td>
-      ${dc(calc.start,false,submitted,true)}${dc(calc.lastISP,false,submitted,true)}
+      ${dc(calc.start,false,submitted,true)}${dc(calc.scheduleTarget,!!isp.scheduled,submitted)}${dc(calc.lastISP,false,submitted,true)}
       <td class="date-cell" style="${submitted?'color:var(--text3)':''}">${isp.scheduled?fd(isp.scheduled):'—'}</td>
       ${dc(calc.inviteDue,!!isp.invite,submitted)}
       <td class="date-cell" style="${submitted?'color:var(--text3)':''}">${isp.invite?`<span style="color:${submitted?'var(--text3)':'var(--green)'}">✓ ${fd(isp.invite)}</span>`:'—'}</td>
@@ -3258,9 +3605,11 @@ function renderPUNS(){
   tbody.innerHTML=pageClientsPUNS.map(c=>{
     const puns=S.puns[c.mci]||{},pd2=punsDue(puns);
     const status=(puns.category==='All Needs Met'||puns.category==='Child')?'Inactive':puns.category?'Active':'';
+    const _a = age(c.dob);
+    const noPunsLogged = !puns.category && typeof _a === 'number' && _a >= 14;
     return `<tr>
       ${_caseSelectMode ? `<td style="width:32px"><input type="checkbox" class="caseload-select-check" data-mci="${c.mci}"></td>` : ''}
-      <td><strong>${escapeHtml(c.last)}, ${escapeHtml(c.first)}</strong></td>
+      <td${noPunsLogged?' style="background:var(--yellow-light)"':''}><strong>${escapeHtml(c.last)}, ${escapeHtml(c.first)}</strong></td>
       <td class="date-cell">${padMCI(c.mci)}</td>
       <td><span class="pill pill-blue" style="font-size:10px">${c.waiver||'—'}</span></td>
       <td class="date-cell">${c.dob?fd(c.dob):'—'}</td>
@@ -3380,6 +3729,7 @@ const MODAL_SAVE = {
   punsModal:   () => savePUNS(),
   emergModal:  () => saveEmerg(),
   abModal:     () => saveAB(),
+  advanceARUDModal: () => confirmAdvanceISP(),
 };
 
 document.addEventListener('keydown', e => {
@@ -3419,6 +3769,7 @@ function openClientModal(mci){
   document.getElementById('f-waiver').value=c?.waiver||'';
   document.getElementById('f-comments').value=c?.comments||'';
   document.getElementById('f-started').value=c?.startedWithSc||'';
+  document.getElementById('f-opened').value=c?.dateOpened||'';
   // Show the appropriate status action button — only on edit
   const moveInactiveBtn = document.getElementById('move-to-inactive-btn');
   const moveActiveBtn = document.getElementById('move-to-active-btn');
@@ -3476,8 +3827,8 @@ function validateAllDatesIn(containerId) {
 function saveClient(){
   const rawMCI = document.getElementById('f-mci').value.replace(/[^0-9]/g,'').trim();
   const mci = rawMCI.padStart(9,'0').slice(-9);
-  const first=document.getElementById('f-first').value.trim();
-  const last=document.getElementById('f-last').value.trim();
+  const first=toProperCase(document.getElementById('f-first').value.trim());
+  const last=toProperCase(document.getElementById('f-last').value.trim());
   const dob=document.getElementById('f-dob').value;
   const waiver=document.getElementById('f-waiver').value;
   // Status is no longer read from a dropdown — it's controlled exclusively
@@ -3486,11 +3837,13 @@ function saveClient(){
   const status = _editMCI ? (S.clients.find(x=>x.mci===_editMCI)?.status || 'Active') : 'Active';
   const comments=document.getElementById('f-comments').value.trim();
   const startedWithSc=document.getElementById('f-started').value;
+  const dateOpened=document.getElementById('f-opened').value;
   const missing = [];
   if(!rawMCI) missing.push('MCI#');
   if(!first) missing.push('First Name');
   if(!last) missing.push('Last Name');
   if(!waiver) missing.push('Waiver Type');
+  if(!dob) missing.push('Date of Birth');
   if(missing.length) return toast('Required: ' + missing.join(', '), true);
   // Validate DOB range
   if (dob) {
@@ -3506,11 +3859,11 @@ function saveClient(){
   if(_editMCI){
     const c=S.clients.find(x=>x.mci===_editMCI);
     const prev={...c};
-    c.first=first;c.last=last;c.dob=dob;c.waiver=waiver;c.status=status;c.startedWithSc=startedWithSc;c.comments=comments;
-    const _cs=auditSummary(prev,c,['first','last','dob','waiver','status','startedWithSc']); if(_cs) auditEntry(_editMCI,'Client','Updated',_cs);
+    c.first=first;c.last=last;c.dob=dob;c.waiver=waiver;c.status=status;c.startedWithSc=startedWithSc;c.dateOpened=dateOpened;c.comments=comments;
+    const _cs=auditSummary(prev,c,['first','last','dob','waiver','status','startedWithSc','dateOpened']); if(_cs) auditEntry(_editMCI,'Client','Updated',_cs);
   } else {
     if(S.clients.find(x=>x.mci===mci)) return toast('MCI# already exists',true);
-    S.clients.push({mci,first,last,dob,waiver,status,startedWithSc,comments,createdOn:new Date().toISOString().split('T')[0]});
+    S.clients.push({mci,first,last,dob,waiver,status,startedWithSc,dateOpened,comments,createdOn:new Date().toISOString().split('T')[0]});
     auditEntry(mci,'Client','Added',`waiver: ${waiver} · status: ${status}`);
     S.monitoring[mci] = {};
     S.isp[mci] = {};
@@ -3957,9 +4310,14 @@ function updateEmergNextDue(type) {
   nextEl.value = (val && pd(val)) ? fd(addYrs(pd(val), 1)) : '';
 }
 
-function addEmergEntry(type) {
+// Commits a completed-date entry for one type (emerg/ffa/voter) into its
+// log, called from Save for whichever sections have a pending date typed
+// in. Does NOT save/render/toast — the caller handles that once, after
+// everything that needs to commit is done, so clicking Save doesn't fire
+// 3 separate saves/toasts if all three sections have a pending date.
+function commitEmergEntry(type) {
   const completed = document.getElementById('em-new-' + type).value;
-  if (!completed) { toast('Please enter a Completed Date', true); return; }
+  if (!completed) return false;
   migrateEmergToLog(_emergMCI);
   const logKey = type + 'Log';
   if (!S.emergency[_emergMCI]) S.emergency[_emergMCI] = {};
@@ -3968,12 +4326,10 @@ function addEmergEntry(type) {
   S.emergency[_emergMCI][logKey].push({completed, nextDue, ts: Date.now()});
   S.emergency[_emergMCI][type] = getEmergDate(_emergMCI, type);
   auditEntry(_emergMCI, type.toUpperCase() + ' Log', 'Added', 'Completed: ' + fd(pd(completed)) + ' · Next Due: ' + nextDue);
-  save();
   document.getElementById('em-new-' + type).value = '';
   document.getElementById('em-nextdue-' + type).value = '';
   renderEmergSectionStatus(_emergMCI, type);
-  render();
-  toast('Entry added');
+  return true;
 }
 
 // SC only sees current status (last done + next due) — full log stored in JSON for coach
@@ -4042,8 +4398,15 @@ function openEmergModal(mci){
 
 
 function saveEmerg(){
-  // EP/FFA/Voter are saved via addEmergEntry() — this only saves lc/res/recert
-  const prevE=S.emergency[_emergMCI]||{};
+  // EP/FFA/Voter: Save commits any pending Completed Date typed into any
+  // of the three sections — this is the only step needed to log an entry.
+  ['emerg','ffa','voter'].forEach(type => commitEmergEntry(type));
+
+  // Snapshot BEFORE mutating lc/res/recert below — S.emergency[_emergMCI]
+  // is a live object reference, so without a real copy here, oldObj and
+  // newObj would be the same object and auditSummary would never detect
+  // a change (a pre-existing bug, fixed while in this area).
+  const prevE = {...(S.emergency[_emergMCI]||{})};
   if (!S.emergency[_emergMCI]) S.emergency[_emergMCI] = {};
   S.emergency[_emergMCI].lc = document.getElementById('em-lc').value;
   S.emergency[_emergMCI].res = document.getElementById('em-res').value;
@@ -4561,6 +4924,7 @@ async function confirmSelectiveImport() {
         if (c.last)      existing.last     = c.last;
         if (c.waiver)    existing.waiver   = c.waiver;
         if (c.dob)       existing.dob      = c.dob;
+        if (c.dateOpened) existing.dateOpened = c.dateOpened;
         if (c.comments)  existing.comments = c.comments;
         // startedWithSc is NOT updated — preserves this SC's original relationship date
         // If this SC had the client as Inactive (transferred away), merging back
@@ -4622,6 +4986,489 @@ async function confirmSelectiveImport() {
 
 
 
+// ================================================================
+// IMPORT CASELOAD FROM CSV (HCSIS roster report)
+// ================================================================
+// Admin runs the HCSIS report and hands each SC their own CSV — this is for
+// initial setup / adding new consumers only. It never touches existing
+// consumers' tracking data; a consumer whose MCI# already exists is shown
+// for reference but is not editable or importable here.
+let _csvImportRows = [];
+let _csvImportFilename = '';
+
+async function triggerImportCsvCaseload() {
+  if (window.electronAPI) {
+    const result = await window.electronAPI.importCsvCaseload();
+    if (!result) return; // cancelled
+    if (result.error) { toast('Import failed: ' + result.error, true); return; }
+    processCsvImport(result.text, result.name);
+  } else {
+    const input = document.getElementById('csv-import-file-input');
+    if (!input) return;
+    input.value = '';
+    input.click();
+  }
+}
+
+async function importCsvCaseloadFile(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  try {
+    const text = await file.text();
+    processCsvImport(text, file.name);
+  } catch(e) { toast('Could not read that CSV file', true); }
+}
+
+// Parses HCSIS-format "M/D/YYYY" into "YYYY-MM-DD"; returns '' if not a
+// real calendar date rather than guessing.
+function parseCsvDate(s) {
+  if (!s) return '';
+  const str = String(s).trim();
+  const m = str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (!m) return '';
+  const [, mo, d, y] = m;
+  const mm = mo.padStart(2,'0'), dd = d.padStart(2,'0');
+  const test = new Date(`${y}-${mm}-${dd}T00:00:00`);
+  if (isNaN(test) || test.getFullYear() != y || test.getMonth()+1 != +mo || test.getDate() != +d) return '';
+  return `${y}-${mm}-${dd}`;
+}
+
+// Maps HCSIS Waiver_Program text to this app's waiver names. HCSIS wording
+// is usually an exact match already — this just tolerates minor variation
+// (case, an extra "Waiver" suffix) rather than requiring an exact string
+// match. Returns '' if unrecognized, so the reviewer picks it manually
+// rather than the import silently guessing wrong.
+function normalizeWaiverImport(raw) {
+  const s = String(raw||'').trim().toLowerCase();
+  if (!s) return '';
+  if (/consolidated/.test(s)) return 'Consolidated Waiver';
+  if (/community living/.test(s)) return 'Community Living Waiver';
+  if (/p\W*fds/.test(s)) return 'P/FDS Waiver';
+  if (/sc services only/.test(s)) return 'SC Services Only';
+  if (/private icf/.test(s)) return 'Private ICF/MR';
+  if (/^base$/.test(s)) return 'Base';
+  if (/^other$/.test(s)) return 'Other';
+  return '';
+}
+
+// "DAVIS, ANTHONY" -> {last:'Davis', first:'Anthony'} — same Title Case
+// formatting rule as manual entry.
+function parseImportedName(raw) {
+  const parts = String(raw||'').split(',');
+  return {
+    last:  toProperCase((parts[0]||'').trim()),
+    first: toProperCase((parts[1]||'').trim())
+  };
+}
+
+// Minimal, dependency-free CSV parser (RFC 4180: quoted fields, embedded
+// commas, escaped "" quotes). Used instead of SheetJS's CSV reader because
+// SheetJS applies its own date-detection/reformatting heuristics to
+// numeric-looking columns — e.g. it silently turns "11/28/2005" into
+// "11/28/05" (2-digit year) — which corrupts the very DOB values this
+// import depends on. This parser never coerces types; every value comes
+// back exactly as written in the file.
+function parseCsvText(text) {
+  const rows = [];
+  let row = [], field = '', inQuotes = false;
+  const s = String(text||'').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+  for (let i = 0; i < s.length; i++) {
+    const ch = s[i], next = s[i+1];
+    if (inQuotes) {
+      if (ch === '"' && next === '"') { field += '"'; i++; }
+      else if (ch === '"') { inQuotes = false; }
+      else { field += ch; }
+    } else {
+      if (ch === '"') { inQuotes = true; }
+      else if (ch === ',') { row.push(field); field = ''; }
+      else if (ch === '\n') { row.push(field); rows.push(row); row = []; field = ''; }
+      else { field += ch; }
+    }
+  }
+  if (field.length || row.length) { row.push(field); rows.push(row); }
+  while (rows.length && rows[rows.length-1].every(c => c === '')) rows.pop();
+  if (!rows.length) return [];
+  const headers = rows[0].map(h => h.trim());
+  return rows.slice(1).map(r => {
+    const obj = {};
+    headers.forEach((h, idx) => { obj[h] = (r[idx] !== undefined ? r[idx] : '').trim(); });
+    return obj;
+  });
+}
+
+function processCsvImport(csvText, filename) {
+  let rows;
+  try {
+    rows = parseCsvText(csvText);
+  } catch(e) {
+    toast('Could not parse that CSV — check the file format', true);
+    return;
+  }
+  if (!rows.length) { toast('No rows found in that CSV', true); return; }
+
+  try {
+    _csvImportFilename = filename || '';
+    _csvImportRows = rows.map((r, i) => {
+      const { last, first } = parseImportedName(r.Client_Name);
+      const rawMci = String(r.MCI||'').replace(/[^0-9]/g,'');
+      const mci = rawMci ? rawMci.padStart(9,'0').slice(-9) : '';
+      const dob = parseCsvDate(r.Date_Of_Birth);
+      const waiver = normalizeWaiverImport(r.Waiver_Program);
+      const exists = mci ? S.clients.some(c => c.mci === mci) : false;
+      const hasCore = !!(mci && last && first);
+      return {
+        _idx: i,
+        last, first, mci, dob, waiver,
+        rawWaiver: String(r.Waiver_Program||''),
+        scName: String(r.SC||''), coachName: String(r.Coach||''),
+        exists,
+        selected: hasCore && !exists && !!dob && !!waiver,
+        // Optional tracking fields — blank unless filled in via Log.
+        // Nothing in the HCSIS CSV maps cleanly to these, so they're never
+        // auto-populated, only offered as an optional manual add.
+        startedWithSc: '', dateOpened: '',
+        monCon: '', monDt: '', monDn: '', // Monitoring needs all three, not just one date
+        ispAnnual: '',
+        punsFinalized: '', punsCategory: '',
+        emergDate: '', ffaDate: '', voterDate: ''
+      };
+    });
+
+    const picker = document.getElementById('import-csv-picker');
+    const review = document.getElementById('import-csv-review');
+    if (picker) picker.style.display = 'none';
+    if (review) review.style.display = 'block';
+    renderCsvImportReview();
+  } catch(e) {
+    console.error('CSV import failed to open the review screen', e);
+    toast('Something went wrong opening the review screen: ' + e.message, true);
+  }
+}
+
+function csvImportChooseAnother() {
+  _csvImportRows = [];
+  _csvImportFilename = '';
+  _csvInlineLogIdx = null;
+  const picker = document.getElementById('import-csv-picker');
+  const review = document.getElementById('import-csv-review');
+  if (picker) picker.style.display = '';
+  if (review) review.style.display = 'none';
+}
+
+// Fully abandons the in-progress import and navigates away — distinct from
+// "Choose a Different File", which resets to the picker but stays on this
+// section so you can immediately try another file.
+function cancelCsvImport() {
+  csvImportChooseAnother();
+  showSec('dashboard');
+}
+
+// Called by render() whenever the Import Caseload section becomes active —
+// restores whatever state was already in progress (picker vs. review table)
+// rather than resetting it, so navigating away and back doesn't lose an
+// in-progress review.
+function renderCsvImportSection() {
+  const picker = document.getElementById('import-csv-picker');
+  const review = document.getElementById('import-csv-review');
+  if (_csvImportRows.length > 0) {
+    if (picker) picker.style.display = 'none';
+    if (review) review.style.display = 'block';
+    renderCsvImportReview();
+  } else {
+    if (picker) picker.style.display = '';
+    if (review) review.style.display = 'none';
+  }
+}
+
+function renderCsvImportReview() {
+  const rows = _csvImportRows;
+  const existCount = rows.filter(r=>r.exists).length;
+  const newCount = rows.filter(r=>!r.exists && r.mci && r.last && r.first).length;
+  const badCount = rows.length - existCount - newCount;
+
+  const info = document.getElementById('import-csv-source-info');
+  if (info) info.innerHTML =
+    `<strong>File:</strong> ${escapeHtml(_csvImportFilename)} &nbsp;·&nbsp; <strong>${rows.length} row(s)</strong> &nbsp;·&nbsp; ` +
+    `${newCount} new &nbsp;·&nbsp; ${existCount} already in your caseload` +
+    (badCount ? ` &nbsp;·&nbsp; <span style="color:var(--red)">${badCount} missing name or MCI#</span>` : '');
+
+  const tbody = document.getElementById('import-csv-body');
+  if (tbody) tbody.innerHTML = rows.map(r => renderCsvImportRow(r)).join('');
+
+  updateCsvImportCommitButton();
+}
+
+function updateCsvImportCommitButton() {
+  const btn = document.getElementById('import-csv-commit-btn');
+  if (!btn) return;
+  const n = _csvImportRows.filter(r => r.selected && !r.exists).length;
+  btn.textContent = n > 0 ? `Import ${n} Selected` : 'Import Selected';
+  btn.disabled = n === 0;
+}
+
+const CSV_LOG_PUNS_CATEGORIES = ['','Planning','Critical','Emergency','Child','All Needs Met'];
+const CSV_LOG_WAIVER_OPTIONS  = ['Consolidated Waiver','Community Living Waiver','P/FDS Waiver','Base','SC Services Only','Private ICF/MR','Other'];
+
+// Which row (if any) currently has its inline Log panel expanded.
+// Only ever one at a time, accordion-style.
+let _csvInlineLogIdx = null;
+
+function renderCsvImportRow(r) {
+  const hasCore = !!(r.mci && r.last && r.first);
+  const canSelect = hasCore && !r.exists;
+  const needsReview = canSelect && (!r.dob || !r.waiver);
+  const hasLoggedExtras = !!(r.startedWithSc || r.dateOpened || r.monDt || r.ispAnnual || r.punsFinalized || r.emergDate || r.ffaDate || r.voterDate);
+  const statusBadge = r.exists
+    ? '<span class="pill pill-gray">Already in caseload</span>'
+    : !hasCore
+      ? '<span class="pill pill-critical">Missing name/MCI#</span>'
+      : needsReview
+        ? '<span class="pill pill-yellow">Needs review</span>'
+        : '<span class="pill pill-blue">New</span>';
+
+  const rowStyle = r.exists ? 'background:var(--surface2);opacity:.7' : (needsReview || !hasCore) ? 'background:var(--yellow-light)' : '';
+  const isInlineOpen = _csvInlineLogIdx === r._idx;
+
+  const mainRow = `<tr style="${rowStyle}">
+    <td style="padding:8px;text-align:center">
+      ${canSelect ? `<input type="checkbox" class="csv-import-check" data-idx="${r._idx}" ${r.selected?'checked':''} onchange="csvImportToggleRow(${r._idx}, this.checked)">` : ''}
+    </td>
+    <td style="padding:8px;font-weight:500">${escapeHtml(r.last)||'<em style="color:var(--red)">missing</em>'}${r.last||r.first?', ':''}${escapeHtml(r.first)}</td>
+    <td style="padding:8px;color:var(--text3)">${r.mci?padMCI(r.mci):'<span style="color:var(--red)">missing</span>'}</td>
+    <td style="padding:8px">${r.dob?fd(r.dob):(canSelect?'<span style="color:var(--red)">missing</span>':'—')}</td>
+    <td style="padding:8px">${r.waiver||(canSelect?'<span style="color:var(--red)">unrecognized</span>':(r.rawWaiver||'—'))}</td>
+    <td style="padding:8px">${statusBadge}</td>
+    <td style="padding:8px;text-align:center">
+      ${canSelect ? `
+        <div style="display:flex;align-items:center;justify-content:center;gap:6px;flex-wrap:wrap">
+          <button type="button" class="btn btn-ghost btn-sm" onclick="csvInlineLogToggle(${r._idx})">${isInlineOpen?'Close':'Log'}</button>
+          ${hasLoggedExtras ? '<span class="pill" style="background:var(--green-light);color:var(--green);font-size:10px;white-space:nowrap">✓ Logged</span>' : ''}
+        </div>
+      ` : ''}
+    </td>
+  </tr>`;
+
+  if (!isInlineOpen) return mainRow;
+
+  return mainRow + `<tr style="background:var(--accent-light)">
+    <td style="border-left:3px solid var(--accent)"></td>
+    <td colspan="6" style="padding:12px 14px 18px;border-left:3px solid var(--accent)">
+      <div style="display:flex;flex-direction:column;gap:14px">
+        <div>
+          <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--text3);margin-bottom:6px;letter-spacing:.03em">Consumer Info</div>
+          <div class="form-grid">
+            <div class="form-group"><label>First Name</label><input type="text" value="${escapeHtml(r.first)}" onblur="csvInlineLogSetField(${r._idx},'first',toProperCase(this.value))"></div>
+            <div class="form-group"><label>Last Name</label><input type="text" value="${escapeHtml(r.last)}" onblur="csvInlineLogSetField(${r._idx},'last',toProperCase(this.value))"></div>
+            <div class="form-group"><label>Date of Birth *</label><input type="date" min="1900-01-01" value="${r.dob}" onchange="csvInlineLogSetField(${r._idx},'dob',this.value)"></div>
+            <div class="form-group"><label>Waiver Type *</label>
+              <select onchange="csvInlineLogSetField(${r._idx},'waiver',this.value)">
+                <option value="" ${!r.waiver?'selected':''}>-- Select --</option>
+                ${CSV_LOG_WAIVER_OPTIONS.map(w=>`<option ${r.waiver===w?'selected':''}>${w}</option>`).join('')}
+              </select>
+            </div>
+          </div>
+        </div>
+        <div>
+          <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--text3);margin-bottom:6px;letter-spacing:.03em">Caseload</div>
+          <div class="form-grid">
+            <div class="form-group"><label>Date Started with Me as SC</label><input type="date" min="1900-01-01" max="2500-12-31" value="${r.startedWithSc}" onchange="csvInlineLogSetField(${r._idx},'startedWithSc',this.value)"></div>
+            <div class="form-group"><label>Date of Opening</label><input type="date" min="1900-01-01" max="2500-12-31" value="${r.dateOpened}" onchange="csvInlineLogSetField(${r._idx},'dateOpened',this.value)"></div>
+          </div>
+        </div>
+        <div>
+          <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--text3);margin-bottom:6px;letter-spacing:.03em">Last Monitoring</div>
+          <div class="form-grid">
+            <div class="form-group"><label>Contact Type</label>
+              <select onchange="csvInlineLogSetField(${r._idx},'monCon',this.value)">
+                <option value="" ${!r.monCon?'selected':''}>--</option>
+                <option value="H" ${r.monCon==='H'?'selected':''}>H — Home</option>
+                <option value="HV" ${r.monCon==='HV'?'selected':''}>HV — Home Video</option>
+                <option value="D" ${r.monCon==='D'?'selected':''}>D — Day Program</option>
+                <option value="DV" ${r.monCon==='DV'?'selected':''}>DV — Day Video</option>
+                <option value="C" ${r.monCon==='C'?'selected':''}>C — Community</option>
+                <option value="CV" ${r.monCon==='CV'?'selected':''}>CV — Community Video</option>
+              </select>
+            </div>
+            <div class="form-group"><label>Contact Date</label><input type="date" min="1900-01-01" max="2500-12-31" value="${r.monDt}" onchange="csvInlineLogSetField(${r._idx},'monDt',this.value)"></div>
+            <div class="form-group"><label>Tool Completed</label><input type="date" min="1900-01-01" max="2500-12-31" value="${r.monDn}" onchange="csvInlineLogSetField(${r._idx},'monDn',this.value)"></div>
+          </div>
+        </div>
+        <div>
+          <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--text3);margin-bottom:6px;letter-spacing:.03em">ISP</div>
+          <div class="form-grid">
+            <div class="form-group"><label>Annual Review Date</label><input type="date" min="1900-01-01" max="2500-12-31" value="${r.ispAnnual}" onchange="csvInlineLogSetField(${r._idx},'ispAnnual',this.value)"></div>
+          </div>
+        </div>
+        <div>
+          <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--text3);margin-bottom:6px;letter-spacing:.03em">PUNS</div>
+          <div class="form-grid">
+            <div class="form-group"><label>Finalized Date</label><input type="date" min="1900-01-01" max="2500-12-31" value="${r.punsFinalized}" onchange="csvInlineLogSetField(${r._idx},'punsFinalized',this.value)"></div>
+            <div class="form-group"><label>Category</label>
+              <select onchange="csvInlineLogSetField(${r._idx},'punsCategory',this.value)">
+                ${CSV_LOG_PUNS_CATEGORIES.map(c=>`<option value="${c}" ${r.punsCategory===c?'selected':''}>${c||'-- Select --'}</option>`).join('')}
+              </select>
+            </div>
+          </div>
+        </div>
+        <div>
+          <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--text3);margin-bottom:6px;letter-spacing:.03em">Emergency / FFA / Voter</div>
+          <div class="form-grid">
+            <div class="form-group"><label>Emergency Preparedness Done</label><input type="date" min="1900-01-01" max="2500-12-31" value="${r.emergDate}" onchange="csvInlineLogSetField(${r._idx},'emergDate',this.value)"></div>
+            <div class="form-group"><label>FFA Done</label><input type="date" min="1900-01-01" max="2500-12-31" value="${r.ffaDate}" onchange="csvInlineLogSetField(${r._idx},'ffaDate',this.value)"></div>
+            <div class="form-group"><label>Voter Preference Done</label><input type="date" min="1900-01-01" max="2500-12-31" value="${r.voterDate}" onchange="csvInlineLogSetField(${r._idx},'voterDate',this.value)"></div>
+          </div>
+        </div>
+      </div>
+    </td>
+  </tr>`;
+}
+
+function csvInlineLogToggle(idx) {
+  if (_csvInlineLogIdx === idx) {
+    // Closing — same requirement the earlier modal version enforced on Save:
+    // Contact Type, Contact Date, and Tool Completed must all be filled in
+    // together, or all left blank. Block the close (not the field edits
+    // themselves) so there's one clear moment to catch a partial entry.
+    const r = _csvImportRows.find(x => x._idx === idx);
+    if (r) {
+      const monFilled = [r.monCon, r.monDt, r.monDn].filter(Boolean).length;
+      if (monFilled > 0 && monFilled < 3) {
+        toast('If logging Last Monitoring, Contact Type, Contact Date, and Tool Completed must all be filled in — or leave all three blank', true);
+        return;
+      }
+    }
+    _csvInlineLogIdx = null;
+  } else {
+    _csvInlineLogIdx = idx;
+  }
+  renderCsvImportReview();
+}
+
+function csvInlineLogSetField(idx, field, value) {
+  const r = _csvImportRows.find(x => x._idx === idx);
+  if (!r) return;
+  r[field] = value;
+  // Deliberately not re-rendering here — rebuilding the table on every
+  // change would destroy and recreate the input the user is actively
+  // typing into. The row's summary and badge catch up when the panel
+  // is closed instead.
+  if (field === 'dob' || field === 'waiver') {
+    // A row may have just been completed — re-evaluate whether it's now
+    // eligible to be selected for import, without a full re-render.
+    const hasCore = !!(r.mci && r.last && r.first);
+    if (hasCore && !r.exists && r.dob && r.waiver && !r.selected) {
+      r.selected = true;
+      const cb = document.querySelector(`.csv-import-check[data-idx="${idx}"]`);
+      if (cb) cb.checked = true;
+      updateCsvImportCommitButton();
+    }
+  }
+}
+
+function csvImportToggleRow(idx, checked) {
+  const r = _csvImportRows.find(x => x._idx === idx);
+  if (!r) return;
+  r.selected = checked;
+  updateCsvImportCommitButton();
+}
+
+function csvImportSelectAll(checked) {
+  _csvImportRows.forEach(r => {
+    const canSelect = !!(r.mci && r.last && r.first) && !r.exists;
+    if (canSelect) r.selected = checked;
+  });
+  renderCsvImportReview();
+}
+
+async function commitCsvImport() {
+  const rows = _csvImportRows.filter(r => r.selected && !r.exists && r.mci && r.last && r.first);
+  if (!rows.length) { toast('No new consumers selected to import', true); return; }
+
+  const missingDob = rows.filter(r => !r.dob);
+  if (missingDob.length) {
+    toast(`${missingDob.length} selected consumer(s) are missing Date of Birth — click Log to add it, or unselect them`, true);
+    return;
+  }
+  const missingWaiver = rows.filter(r => !r.waiver);
+  if (missingWaiver.length) {
+    toast(`${missingWaiver.length} selected consumer(s) need a Waiver Type selected`, true);
+    return;
+  }
+  // Defensive check for the "all three monitoring fields or none" rule.
+  // csvInlineLogToggle() already enforces this when a row's Log panel is
+  // explicitly closed — but that gate can be skipped entirely by leaving
+  // the panel open and clicking Import Selected directly, which left a
+  // partial entry (e.g. Type + Date but no Tool Completed) getting
+  // imported as if it were valid. Checking here too means it's caught
+  // regardless of how the user gets to this point.
+  const partialMon = rows.find(r => {
+    const filled = [r.monCon, r.monDt, r.monDn].filter(Boolean).length;
+    return filled > 0 && filled < 3;
+  });
+  if (partialMon) {
+    _csvInlineLogIdx = partialMon._idx;
+    renderCsvImportReview();
+    toast(`${partialMon.last}, ${partialMon.first}: Last Monitoring needs Contact Type, Contact Date, and Tool Completed all filled in — or all left blank`, true);
+    return;
+  }
+
+  const today = new Date().toISOString().split('T')[0];
+  let added = 0;
+  rows.forEach(r => {
+    if (S.clients.some(c => c.mci === r.mci)) return; // safety net, shouldn't happen
+    S.clients.push({
+      mci: r.mci, first: toProperCase(r.first), last: toProperCase(r.last),
+      dob: r.dob, waiver: r.waiver, status: 'Active',
+      startedWithSc: r.startedWithSc || '', dateOpened: r.dateOpened || '',
+      comments: '', createdOn: today
+    });
+
+    S.monitoring[r.mci] = {};
+    // The all-three-or-none check earlier in this function has already
+    // confirmed every selected row's monitoring fields are either fully
+    // complete or fully blank, so checking monDt here is enough to know
+    // the whole entry is complete.
+    if (r.monDt) {
+      const d = pd(r.monDt);
+      if (d) S.monitoring[r.mci][monthKey(d.getFullYear(), d.getMonth())] = { con: r.monCon || '', dt: r.monDt, dn: r.monDn || '' };
+    }
+
+    S.isp[r.mci] = r.ispAnnual ? { annual: r.ispAnnual } : {};
+
+    S.puns[r.mci] = {};
+    if (r.punsFinalized) S.puns[r.mci].finalized = r.punsFinalized;
+    if (r.punsCategory)  S.puns[r.mci].category  = r.punsCategory;
+
+    S.emergency[r.mci] = {};
+    if (r.emergDate) S.emergency[r.mci].emerg = r.emergDate;
+    if (r.ffaDate)   S.emergency[r.mci].ffa   = r.ffaDate;
+    if (r.voterDate) S.emergency[r.mci].voter = r.voterDate;
+
+    S.abTracker[r.mci] = {};
+
+    auditEntry(r.mci, 'Client', 'Imported from CSV', `waiver: ${r.waiver}`);
+    added++;
+  });
+
+  save();
+  if (window.electronAPI) {
+    await window.electronAPI.saveData(S);
+    const settings = await window.electronAPI.loadSettings();
+    if (settings.backupFolder) {
+      S.meta = S.meta || {};
+      S.meta.lastBackupAt = new Date().toISOString();
+      await window.electronAPI.saveData(S);
+      await window.electronAPI.exportBackupAuto({ userName: getUserId(), folderPath: settings.backupFolder });
+      fireAzureSync();
+      updateBackupLabel();
+    }
+  }
+
+  toast(`✅ ${added} consumer(s) imported`, false, 4000);
+  csvImportChooseAnother(); // reset back to picker state, ready for another file next time
+  showSec('dashboard'); // land on Items Needing Attention to see what's next for the newly-imported consumers
+}
+
 // Old XLSX importBackup removed — handled by selective import
 
 // Advance a single client's annual review date — opens a modal so the SC types
@@ -4643,6 +5490,13 @@ async function confirmAdvanceISP() {
   const newDate = document.getElementById('advance-arud-date')?.value;
   if (!newDate) return toast('Please enter the new Annual Review Date', true);
   const isp = S.isp[mci] || {};
+  const missing = [];
+  if (!isp.scheduled) missing.push('ISP Scheduled date');
+  if (!isp.invite) missing.push('Invite Done date');
+  if (!isp.submitted) missing.push('Submitted date');
+  if (missing.length) {
+    return toast(`Cannot advance to the next ARUD — missing: ${missing.join(', ')}`, true);
+  }
   closeModal('advanceARUDModal');
   // Log the current submission before wiping it
   appendISPLog(mci);
@@ -4793,11 +5647,11 @@ async function exportExcel(){
 
   // ── Sheet 3: ISP Timeline ──
   if (doISP) {
-  const ispData=[['MCI#','Last Name','First Name','Annual Review','Variance','Timeline Start (−120d)','Last ISP Date (−60d)','ISP Scheduled','Invite Due','Invite Completed','Submit By (−50d)','Submitted','Plan Status','Comments']];
+  const ispData=[['MCI#','Last Name','First Name','Annual Review','Variance','Timeline Start (−120d)','Schedule Target (−90d)','Last ISP Date (−60d)','ISP Scheduled','Invite Due','Invite Completed','Submit By (−50d)','Submitted','Plan Status','Comments']];
   S.clients.forEach(c=>{
     const isp=S.isp[c.mci]||{},calc=ispCalc(isp);
     ispData.push([padMCI(c.mci),c.last,c.first,isp.annual?fd(isp.annual):'',isp.variance||'',
-      calc.start?fd(calc.start):'',calc.lastISP?fd(calc.lastISP):'',isp.scheduled?fd(isp.scheduled):'',
+      calc.start?fd(calc.start):'',calc.scheduleTarget?fd(calc.scheduleTarget):'',calc.lastISP?fd(calc.lastISP):'',isp.scheduled?fd(isp.scheduled):'',
       calc.inviteDue?fd(calc.inviteDue):'',isp.invite?fd(isp.invite):'',
       calc.submitBy?fd(calc.submitBy):'',isp.submitted?fd(isp.submitted):'',
       isp.status||'',isp.comments||'']);
@@ -5000,7 +5854,7 @@ function toggleGroup(cat, gid) {
 
 function initInstructions() {
   const sections = [
-    ['instr-overview','Overview'],['instr-setup','First-Time Setup'],['instr-caseload','Caseload'],
+    ['instr-overview','Overview'],['instr-setup','First-Time Setup'],['instr-caseload','Caseload'],['instr-csv-import','Import Caseload'],
     ['instr-monitoring','Monitoring'],['instr-isp','ISP Timeline'],['instr-puns','PUNS'],
     ['instr-emergency','Emergency / FFA / Voter'],['instr-ab','A/B Tracker'],
     ['instr-backup','Saving & Backup'],['instr-dashboard','Items Needing Attention'],
@@ -5239,6 +6093,15 @@ function startAutoBackupTimer() {
   if (_autoBackupTimer) clearInterval(_autoBackupTimer);
   _autoBackupTimer = setInterval(async () => {
     if (!window.electronAPI) return;
+    // Always check for a previously-failed Azure sync and retry it — this
+    // runs regardless of whether local data has changed since the last
+    // cycle. Without this, a sync that failed once (e.g. a network blip
+    // right as the PC wakes from sleep) would only ever get retried at the
+    // next app launch, since the "no new saves" check below would
+    // otherwise skip the whole cycle indefinitely.
+    if (window.electronAPI.retryPendingAzure) {
+      window.electronAPI.retryPendingAzure().catch(()=>{});
+    }
     const settings = await window.electronAPI.loadSettings();
     if (!settings.backupFolder) return;
     // Only backup if there have been saves since last auto-backup
@@ -5475,6 +6338,14 @@ async function launchApp() {
   updateUnsavedBanner();
   render();
   renderDashboard();
+  // Nudge brand-new installs toward Import Caseload instead of adding every
+  // consumer by hand — only fires when there's truly nothing here yet.
+  if (S.clients.length === 0) {
+    setNotif('empty-caseload', 'notif-info',
+      '📋 Your caseload is empty — import one from a roster file instead of adding consumers one by one',
+      `<button class="notif-btn" onclick="dismissNotif('empty-caseload');showSec('csvImport')">Import Caseload</button>`
+    );
+  }
   // Check for updates silently on launch (small delay so app is fully visible first)
   if (window.electronAPI?.checkForUpdates) {
     setTimeout(() => window.electronAPI.checkForUpdates(), 3000);
@@ -5577,6 +6448,15 @@ async function launchApp() {
       });
     }
 
+    if (window.electronAPI.onSystemResumed) {
+      window.electronAPI.onSystemResumed(() => {
+        console.log('System resumed from sleep — retrying any pending Azure upload');
+        if (window.electronAPI.retryPendingAzure) {
+          window.electronAPI.retryPendingAzure().catch(()=>{});
+        }
+      });
+    }
+
 
     window.electronAPI.onAppClosing(async () => {
       // Show the overlay immediately
@@ -5637,8 +6517,8 @@ function updateDetailsBackupLabel() {
 function buildBackupWorkbook() {
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([['name','coach'],[S.user?.name||'',S.user?.coach||'']]), 'User');
-  const cr=[['mci','first','last','dob','waiver','status','startedWithSc','createdOn']];
-  (S.clients||[]).forEach(c=>cr.push([c.mci,c.first,c.last,c.dob||'',c.waiver||'',c.status||'',c.startedWithSc||'',c.createdOn||'']));
+  const cr=[['mci','first','last','dob','waiver','status','startedWithSc','dateOpened','createdOn']];
+  (S.clients||[]).forEach(c=>cr.push([c.mci,c.first,c.last,c.dob||'',c.waiver||'',c.status||'',c.startedWithSc||'',c.dateOpened||'',c.createdOn||'']));
   XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(cr),'Clients');
   const mr=[['mci','year','month','con','dt','dn']];
   Object.entries(S.monitoring||{}).forEach(([mci,e])=>{Object.entries(e||{}).forEach(([k,v])=>{const[y,m]=k.split('_');mr.push([mci,y,m,v?.con||'',v?.dt||'',v?.dn||'']);});});
@@ -5879,8 +6759,15 @@ async function doExportClients() {
     exportSuccess = true;
   }
 
-  // For partial exports (case transfers) — ask if selected clients should be set Inactive
-  if (exportSuccess && !isAll) {
+  // Ask if the exported clients should be set Inactive — same-moment
+  // safeguard so this doesn't become a separate step to remember later.
+  // This used to only fire when the export was a subset of the full
+  // caseload (on the assumption that exporting everyone meant "just a
+  // backup," not a transfer) — but that assumption breaks at any caseload
+  // size, most obviously with exactly one consumer, where selecting your
+  // only client always equals "all of them." Skippable either way via
+  // "No, Keep Active" if this really was just a backup copy.
+  if (exportSuccess) {
     const activeExported = selected.filter(c => c.status === 'Active');
     if (activeExported.length > 0) {
       const clientNames = activeExported.map(c => '• ' + c.last + ', ' + c.first).join('\n');
